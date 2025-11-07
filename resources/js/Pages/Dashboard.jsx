@@ -1,26 +1,518 @@
+import PrimaryButton from '@/Components/PrimaryButton';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
-import { Head } from '@inertiajs/react';
+import { Head, router, useForm } from '@inertiajs/react';
+import { useState } from 'react';
 
-export default function Dashboard() {
+export default function Dashboard({
+    year,
+    month,
+    summary,
+    monthlyData,
+    categoryBreakdown,
+    startingBalance,
+    expensesPerCategoryPerMonth,
+}) {
+    const [selectedYear, setSelectedYear] = useState(year);
+    const [selectedMonth, setSelectedMonth] = useState(month);
+    const [showBalanceModal, setShowBalanceModal] = useState(false);
+
+    const balanceForm = useForm({
+        amount: startingBalance || '',
+        year: selectedYear,
+    });
+
+    const handleYearChange = (newYear) => {
+        setSelectedYear(newYear);
+        router.get(
+            route('dashboard'),
+            { year: newYear, month: selectedMonth },
+            { preserveState: true },
+        );
+    };
+
+    const handleMonthChange = (newMonth) => {
+        setSelectedMonth(newMonth);
+        router.get(
+            route('dashboard'),
+            { year: selectedYear, month: newMonth },
+            { preserveState: true },
+        );
+    };
+
+    const formatCurrency = (amount) => {
+        return new Intl.NumberFormat('en-US', {
+            style: 'currency',
+            currency: 'USD',
+        }).format(amount);
+    };
+
+    const handleBalanceSubmit = (e) => {
+        e.preventDefault();
+        balanceForm.setData('year', selectedYear);
+        balanceForm.post(route('starting-balance.store'), {
+            preserveScroll: true,
+            onSuccess: () => {
+                setShowBalanceModal(false);
+            },
+        });
+    };
+
     return (
         <AuthenticatedLayout
             header={
-                <h2 className="text-xl font-semibold leading-tight text-gray-800 dark:text-gray-200">
-                    Dashboard
-                </h2>
+                <div className="flex items-center justify-between">
+                    <h2 className="text-2xl font-bold leading-tight text-gray-900 dark:text-gray-100">
+                        Budget Dashboard
+                    </h2>
+                    <div className="flex gap-2">
+                        <select
+                            value={selectedYear}
+                            onChange={(e) => handleYearChange(e.target.value)}
+                            className="rounded-md border-gray-300 bg-white text-sm focus:border-primary-500 focus:ring-primary-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300"
+                        >
+                            {Array.from({ length: 10 }, (_, i) => {
+                                const y = new Date().getFullYear() - 5 + i;
+                                return (
+                                    <option key={y} value={y}>
+                                        {y}
+                                    </option>
+                                );
+                            })}
+                        </select>
+                        <select
+                            value={selectedMonth || ''}
+                            onChange={(e) =>
+                                handleMonthChange(
+                                    e.target.value
+                                        ? parseInt(e.target.value)
+                                        : null,
+                                )
+                            }
+                            className="rounded-md border-gray-300 bg-white text-sm focus:border-primary-500 focus:ring-primary-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300"
+                        >
+                            <option value="">All Months</option>
+                            {Array.from({ length: 12 }, (_, i) => {
+                                const monthNum = i + 1;
+                                const date = new Date(2000, monthNum - 1, 1);
+                                return (
+                                    <option key={monthNum} value={monthNum}>
+                                        {date.toLocaleString('default', {
+                                            month: 'long',
+                                        })}
+                                    </option>
+                                );
+                            })}
+                        </select>
+                    </div>
+                </div>
             }
         >
             <Head title="Dashboard" />
 
-            <div className="py-12">
+            <div className="py-6">
                 <div className="mx-auto max-w-7xl sm:px-6 lg:px-8">
-                    <div className="overflow-hidden bg-white shadow-sm sm:rounded-lg dark:bg-gray-800">
-                        <div className="p-6 text-gray-900 dark:text-gray-100">
-                            You're logged in!
+                    {/* Summary Cards */}
+                    <div className="mb-6 grid gap-6 md:grid-cols-4">
+                        <div className="overflow-hidden rounded-lg bg-white shadow dark:bg-gray-800">
+                            <div className="p-6">
+                                <div className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                                    Starting Balance
+                                </div>
+                                <div className="mt-2 flex items-center justify-between">
+                                    <div className="text-3xl font-bold text-gray-900 dark:text-gray-100">
+                                        {formatCurrency(startingBalance || 0)}
+                                    </div>
+                                    <button
+                                        onClick={() =>
+                                            setShowBalanceModal(true)
+                                        }
+                                        className="text-xs text-primary-600 hover:text-primary-700 dark:text-primary-400"
+                                    >
+                                        Edit
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        <div className="overflow-hidden rounded-lg bg-white shadow dark:bg-gray-800">
+                            <div className="p-6">
+                                <div className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                                    Current Balance
+                                </div>
+                                <div className="mt-2 text-3xl font-bold text-blue-600 dark:text-blue-400">
+                                    {formatCurrency(
+                                        summary.currentBalance ||
+                                            startingBalance ||
+                                            0,
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                        <div className="overflow-hidden rounded-lg bg-white shadow dark:bg-gray-800">
+                            <div className="p-6">
+                                <div className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                                    Total Income
+                                </div>
+                                <div className="mt-2 text-3xl font-bold text-green-600 dark:text-green-400">
+                                    {formatCurrency(summary.totalIncome)}
+                                </div>
+                            </div>
+                        </div>
+                        <div className="overflow-hidden rounded-lg bg-white shadow dark:bg-gray-800">
+                            <div className="p-6">
+                                <div className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                                    Total Expenses
+                                </div>
+                                <div className="mt-2 text-3xl font-bold text-red-600 dark:text-red-400">
+                                    {formatCurrency(summary.totalExpenses)}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Monthly Chart */}
+                    <div className="mb-6 overflow-hidden rounded-lg bg-white shadow dark:bg-gray-800">
+                        <div className="p-6">
+                            <h3 className="mb-4 text-lg font-semibold text-gray-900 dark:text-gray-100">
+                                Monthly Overview
+                            </h3>
+                            <div className="space-y-2">
+                                {monthlyData.map((data) => {
+                                    const maxValue = Math.max(
+                                        ...monthlyData.map((d) =>
+                                            Math.max(d.income, d.expenses),
+                                        ),
+                                    );
+                                    const incomePercent =
+                                        (data.income / maxValue) * 100;
+                                    const expensePercent =
+                                        (data.expenses / maxValue) * 100;
+
+                                    return (
+                                        <div
+                                            key={data.month}
+                                            className="flex items-center gap-4"
+                                        >
+                                            <div className="w-20 text-sm font-medium text-gray-700 dark:text-gray-300">
+                                                {data.monthName.substring(0, 3)}
+                                            </div>
+                                            <div className="flex-1">
+                                                <div className="mb-1 flex gap-1">
+                                                    <div
+                                                        className="h-6 rounded-l bg-green-500"
+                                                        style={{
+                                                            width: `${incomePercent}%`,
+                                                        }}
+                                                        title={`Income: ${formatCurrency(data.income)}`}
+                                                    />
+                                                    <div
+                                                        className="h-6 rounded-r bg-red-500"
+                                                        style={{
+                                                            width: `${expensePercent}%`,
+                                                        }}
+                                                        title={`Expenses: ${formatCurrency(data.expenses)}`}
+                                                    />
+                                                </div>
+                                                <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400">
+                                                    <span>
+                                                        Income:{' '}
+                                                        {formatCurrency(
+                                                            data.income,
+                                                        )}
+                                                    </span>
+                                                    <span>
+                                                        Expenses:{' '}
+                                                        {formatCurrency(
+                                                            data.expenses,
+                                                        )}
+                                                    </span>
+                                                </div>
+                                                <div className="mt-1 flex justify-between text-xs">
+                                                    <span
+                                                        className={
+                                                            data.netSavings >= 0
+                                                                ? 'font-semibold text-green-600 dark:text-green-400'
+                                                                : 'font-semibold text-red-600 dark:text-red-400'
+                                                        }
+                                                    >
+                                                        Net Savings:{' '}
+                                                        {formatCurrency(
+                                                            data.netSavings,
+                                                        )}
+                                                    </span>
+                                                    <span className="font-semibold text-blue-600 dark:text-blue-400">
+                                                        Balance:{' '}
+                                                        {formatCurrency(
+                                                            data.balance,
+                                                        )}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Expenses by Category */}
+                    <div className="mb-6 overflow-hidden rounded-lg bg-white shadow dark:bg-gray-800">
+                        <div className="p-6">
+                            <h3 className="mb-4 text-lg font-semibold text-gray-900 dark:text-gray-100">
+                                Expenses by Category
+                            </h3>
+                            <div className="space-y-4">
+                                {categoryBreakdown.length === 0 ? (
+                                    <p className="text-sm text-gray-500 dark:text-gray-400">
+                                        No expenses yet
+                                    </p>
+                                ) : (
+                                    categoryBreakdown.map((cat) => (
+                                        <div
+                                            key={cat.id}
+                                            className="flex items-center justify-between border-b border-gray-200 pb-3 dark:border-gray-700"
+                                        >
+                                            <div className="flex items-center gap-2">
+                                                <div
+                                                    className="h-4 w-4 rounded"
+                                                    style={{
+                                                        backgroundColor:
+                                                            cat.color,
+                                                    }}
+                                                />
+                                                <span className="font-medium text-gray-900 dark:text-gray-100">
+                                                    {cat.name}
+                                                </span>
+                                            </div>
+                                            <div className="flex items-center gap-4">
+                                                <div className="text-right">
+                                                    <div className="text-xs text-gray-500 dark:text-gray-400">
+                                                        Total
+                                                    </div>
+                                                    <div className="font-semibold text-gray-900 dark:text-gray-100">
+                                                        {formatCurrency(
+                                                            cat.amount,
+                                                        )}
+                                                    </div>
+                                                </div>
+                                                <div className="text-right">
+                                                    <div className="text-xs text-gray-500 dark:text-gray-400">
+                                                        Average
+                                                    </div>
+                                                    <div className="font-semibold text-gray-900 dark:text-gray-100">
+                                                        {formatCurrency(
+                                                            cat.average,
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ))
+                                )}
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Expenses per Category per Month Table */}
+                    <div className="mb-6 overflow-hidden rounded-lg bg-white shadow dark:bg-gray-800">
+                        <div className="p-6">
+                            <h3 className="mb-4 text-lg font-semibold text-gray-900 dark:text-gray-100">
+                                Expenses per Category per Month
+                            </h3>
+                            <div className="overflow-x-auto">
+                                <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                                    <thead className="bg-gray-50 dark:bg-gray-700">
+                                        <tr>
+                                            <th className="sticky left-0 z-10 bg-gray-50 px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:bg-gray-700 dark:text-gray-300">
+                                                Category
+                                            </th>
+                                            {monthlyData.map((month) => (
+                                                <th
+                                                    key={month.month}
+                                                    className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-300"
+                                                >
+                                                    {month.monthName.substring(
+                                                        0,
+                                                        3,
+                                                    )}
+                                                </th>
+                                            ))}
+                                            <th className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-300">
+                                                Total
+                                            </th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-gray-200 bg-white dark:divide-gray-700 dark:bg-gray-800">
+                                        {expensesPerCategoryPerMonth &&
+                                        expensesPerCategoryPerMonth.length >
+                                            0 ? (
+                                            <>
+                                                {expensesPerCategoryPerMonth.map(
+                                                    (category) => (
+                                                        <tr
+                                                            key={category.id}
+                                                            className="hover:bg-gray-50 dark:hover:bg-gray-700"
+                                                        >
+                                                            <td className="sticky left-0 z-10 whitespace-nowrap bg-white px-4 py-3 text-sm font-medium text-gray-900 dark:bg-gray-800 dark:text-gray-100">
+                                                                <div className="flex items-center gap-2">
+                                                                    <div
+                                                                        className="h-4 w-4 rounded"
+                                                                        style={{
+                                                                            backgroundColor:
+                                                                                category.color,
+                                                                        }}
+                                                                    />
+                                                                    <span>
+                                                                        {
+                                                                            category.name
+                                                                        }
+                                                                    </span>
+                                                                </div>
+                                                            </td>
+                                                            {category.monthlyExpenses.map(
+                                                                (
+                                                                    amount,
+                                                                    index,
+                                                                ) => (
+                                                                    <td
+                                                                        key={
+                                                                            index
+                                                                        }
+                                                                        className="whitespace-nowrap px-4 py-3 text-right text-sm text-gray-900 dark:text-gray-100"
+                                                                    >
+                                                                        {amount >
+                                                                        0
+                                                                            ? formatCurrency(
+                                                                                  amount,
+                                                                              )
+                                                                            : '-'}
+                                                                    </td>
+                                                                ),
+                                                            )}
+                                                            <td className="whitespace-nowrap px-4 py-3 text-right text-sm font-semibold text-gray-900 dark:text-gray-100">
+                                                                {formatCurrency(
+                                                                    category.total,
+                                                                )}
+                                                            </td>
+                                                        </tr>
+                                                    ),
+                                                )}
+                                                <tr className="border-t-2 border-gray-300 bg-gray-50 font-semibold dark:border-gray-600 dark:bg-gray-700">
+                                                    <td className="sticky left-0 z-10 whitespace-nowrap bg-gray-50 px-4 py-3 text-sm font-bold text-gray-900 dark:bg-gray-700 dark:text-gray-100">
+                                                        Total
+                                                    </td>
+                                                    {monthlyData.map(
+                                                        (month, index) => {
+                                                            const monthTotal =
+                                                                expensesPerCategoryPerMonth.reduce(
+                                                                    (
+                                                                        sum,
+                                                                        cat,
+                                                                    ) =>
+                                                                        sum +
+                                                                        cat
+                                                                            .monthlyExpenses[
+                                                                            index
+                                                                        ],
+                                                                    0,
+                                                                );
+                                                            return (
+                                                                <td
+                                                                    key={
+                                                                        month.month
+                                                                    }
+                                                                    className="whitespace-nowrap px-4 py-3 text-right text-sm font-bold text-gray-900 dark:text-gray-100"
+                                                                >
+                                                                    {formatCurrency(
+                                                                        monthTotal,
+                                                                    )}
+                                                                </td>
+                                                            );
+                                                        },
+                                                    )}
+                                                    <td className="whitespace-nowrap px-4 py-3 text-right text-sm font-bold text-gray-900 dark:text-gray-100">
+                                                        {formatCurrency(
+                                                            expensesPerCategoryPerMonth.reduce(
+                                                                (sum, cat) =>
+                                                                    sum +
+                                                                    cat.total,
+                                                                0,
+                                                            ),
+                                                        )}
+                                                    </td>
+                                                </tr>
+                                            </>
+                                        ) : (
+                                            <tr>
+                                                <td
+                                                    colSpan={14}
+                                                    className="px-4 py-8 text-center text-sm text-gray-500 dark:text-gray-400"
+                                                >
+                                                    No expenses yet
+                                                </td>
+                                            </tr>
+                                        )}
+                                    </tbody>
+                                </table>
+                            </div>
                         </div>
                     </div>
                 </div>
             </div>
+
+            {/* Starting Balance Modal */}
+            {showBalanceModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+                    <div className="w-full max-w-md rounded-lg bg-white p-6 shadow-xl dark:bg-gray-800">
+                        <h3 className="mb-4 text-lg font-semibold text-gray-900 dark:text-gray-100">
+                            Set Starting Balance for {selectedYear}
+                        </h3>
+                        <form onSubmit={handleBalanceSubmit}>
+                            <div className="space-y-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                        Starting Balance
+                                    </label>
+                                    <input
+                                        type="number"
+                                        step="0.01"
+                                        value={balanceForm.data.amount}
+                                        onChange={(e) =>
+                                            balanceForm.setData(
+                                                'amount',
+                                                parseFloat(e.target.value) || 0,
+                                            )
+                                        }
+                                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 dark:border-gray-700 dark:bg-gray-700 dark:text-gray-300"
+                                        required
+                                        autoFocus
+                                    />
+                                    <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                        This is your account balance at the
+                                        start of {selectedYear}. The balance
+                                        will be calculated automatically for
+                                        each month.
+                                    </p>
+                                </div>
+                            </div>
+                            <div className="mt-6 flex justify-end gap-3">
+                                <button
+                                    type="button"
+                                    onClick={() => setShowBalanceModal(false)}
+                                    className="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
+                                >
+                                    Cancel
+                                </button>
+                                <PrimaryButton
+                                    type="submit"
+                                    disabled={balanceForm.processing}
+                                >
+                                    Save
+                                </PrimaryButton>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
         </AuthenticatedLayout>
     );
 }

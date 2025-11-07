@@ -3,17 +3,29 @@ import Dropdown from '@/Components/Dropdown';
 import NavLink from '@/Components/NavLink';
 import ResponsiveNavLink from '@/Components/ResponsiveNavLink';
 import { Link, usePage } from '@inertiajs/react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 export default function AuthenticatedLayout({ header, children }) {
     const user = usePage().props.auth.user;
+    const flash = usePage().props.flash;
+    const [showFlash, setShowFlash] = useState(false);
+
+    useEffect(() => {
+        if (flash?.success) {
+            setShowFlash(true);
+            const timer = setTimeout(() => {
+                setShowFlash(false);
+            }, 5000);
+            return () => clearTimeout(timer);
+        }
+    }, [flash]);
 
     const [showingNavigationDropdown, setShowingNavigationDropdown] =
         useState(false);
 
     return (
-        <div className="min-h-screen bg-gray-100 dark:bg-gray-900">
-            <nav className="border-b border-gray-100 bg-white dark:border-gray-700 dark:bg-gray-800">
+        <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+            <nav className="border-b border-primary-200 bg-white dark:border-gray-700 dark:bg-gray-800">
                 <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
                     <div className="flex h-16 justify-between">
                         <div className="flex">
@@ -29,6 +41,30 @@ export default function AuthenticatedLayout({ header, children }) {
                                     active={route().current('dashboard')}
                                 >
                                     Dashboard
+                                </NavLink>
+                                <NavLink
+                                    href={route('transactions.index')}
+                                    active={route().current('transactions.*')}
+                                >
+                                    Expenses
+                                </NavLink>
+                                <NavLink
+                                    href={route('income-entries.index')}
+                                    active={route().current('income-entries.*')}
+                                >
+                                    Income
+                                </NavLink>
+                                <NavLink
+                                    href={route('categories.index')}
+                                    active={route().current('categories.*')}
+                                >
+                                    Categories
+                                </NavLink>
+                                <NavLink
+                                    href={route('income-sources.index')}
+                                    active={route().current('income-sources.*')}
+                                >
+                                    Sources
                                 </NavLink>
                             </div>
                         </div>
@@ -134,6 +170,30 @@ export default function AuthenticatedLayout({ header, children }) {
                         >
                             Dashboard
                         </ResponsiveNavLink>
+                        <ResponsiveNavLink
+                            href={route('transactions.index')}
+                            active={route().current('transactions.*')}
+                        >
+                            Expenses
+                        </ResponsiveNavLink>
+                        <ResponsiveNavLink
+                            href={route('income-entries.index')}
+                            active={route().current('income-entries.*')}
+                        >
+                            Income
+                        </ResponsiveNavLink>
+                        <ResponsiveNavLink
+                            href={route('categories.index')}
+                            active={route().current('categories.*')}
+                        >
+                            Categories
+                        </ResponsiveNavLink>
+                        <ResponsiveNavLink
+                            href={route('income-sources.index')}
+                            active={route().current('income-sources.*')}
+                        >
+                            Sources
+                        </ResponsiveNavLink>
                     </div>
 
                     <div className="border-t border-gray-200 pb-1 pt-4 dark:border-gray-600">
@@ -168,6 +228,55 @@ export default function AuthenticatedLayout({ header, children }) {
                         {header}
                     </div>
                 </header>
+            )}
+
+            {/* Flash Message */}
+            {showFlash && flash?.success && (
+                <div className="mx-auto max-w-7xl px-4 pt-4 sm:px-6 lg:px-8">
+                    <div className="rounded-md bg-green-50 p-4 dark:bg-green-900/20">
+                        <div className="flex">
+                            <div className="flex-shrink-0">
+                                <svg
+                                    className="h-5 w-5 text-green-400"
+                                    viewBox="0 0 20 20"
+                                    fill="currentColor"
+                                >
+                                    <path
+                                        fillRule="evenodd"
+                                        d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z"
+                                        clipRule="evenodd"
+                                    />
+                                </svg>
+                            </div>
+                            <div className="ml-3">
+                                <p className="text-sm font-medium text-green-800 dark:text-green-200">
+                                    {flash.success}
+                                </p>
+                            </div>
+                            <div className="ml-auto pl-3">
+                                <div className="-mx-1.5 -my-1.5">
+                                    <button
+                                        onClick={() => setShowFlash(false)}
+                                        className="inline-flex rounded-md bg-green-50 p-1.5 text-green-500 hover:bg-green-100 focus:outline-none focus:ring-2 focus:ring-green-600 focus:ring-offset-2 focus:ring-offset-green-50 dark:bg-green-900/20 dark:text-green-400 dark:hover:bg-green-900/40"
+                                    >
+                                        <span className="sr-only">Dismiss</span>
+                                        <svg
+                                            className="h-5 w-5"
+                                            viewBox="0 0 20 20"
+                                            fill="currentColor"
+                                        >
+                                            <path
+                                                fillRule="evenodd"
+                                                d="M3.28 2.22a.75.75 0 00-1.06 1.06l14.5 14.5a.75.75 0 101.06-1.06L3.28 2.22zM7.28 4.22l10.5 10.5a.75.75 0 11-1.06 1.06L6.22 5.28a.75.75 0 011.06-1.06z"
+                                                clipRule="evenodd"
+                                            />
+                                        </svg>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             )}
 
             <main>{children}</main>
