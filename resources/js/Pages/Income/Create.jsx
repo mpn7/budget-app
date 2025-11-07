@@ -1,4 +1,3 @@
-import PrimaryButton from '@/Components/PrimaryButton';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, router } from '@inertiajs/react';
 import { useEffect, useRef, useState } from 'react';
@@ -15,6 +14,7 @@ export default function Create({
     const [cellData, setCellData] = useState({});
     const [focusedCell, setFocusedCell] = useState(null);
     const [isProcessing, setIsProcessing] = useState(false);
+    const [lastSaved, setLastSaved] = useState(null);
     const inputRefs = useRef({});
 
     // Initialize cell data from existing income entries
@@ -68,6 +68,8 @@ export default function Create({
     const handleCellBlur = (sourceId) => {
         const key = `${sourceId}`;
         const value = cellData[key];
+        let updatedData = { ...cellData };
+
         if (value) {
             // Check if the value contains a + sign (multiple values to sum)
             if (value.includes('+')) {
@@ -79,34 +81,31 @@ export default function Create({
                 });
                 const sum = parts.reduce((total, num) => total + num, 0);
                 if (!isNaN(sum) && sum > 0) {
-                    setCellData((prev) => ({
-                        ...prev,
-                        [key]: sum.toFixed(2),
-                    }));
+                    updatedData[key] = sum.toFixed(2);
                 } else {
                     // If calculation failed, clear the field
-                    setCellData((prev) => ({
-                        ...prev,
-                        [key]: '',
-                    }));
+                    updatedData[key] = '';
                 }
             } else {
                 // Single value - format to 2 decimal places
                 const numValue = parseFloat(value);
                 if (!isNaN(numValue) && numValue > 0) {
-                    setCellData((prev) => ({
-                        ...prev,
-                        [key]: numValue.toFixed(2),
-                    }));
+                    updatedData[key] = numValue.toFixed(2);
                 } else {
                     // Clear invalid values
-                    setCellData((prev) => ({
-                        ...prev,
-                        [key]: '',
-                    }));
+                    updatedData[key] = '';
                 }
             }
+        } else {
+            // Field is empty, remove it from data
+            delete updatedData[key];
         }
+
+        // Update state
+        setCellData(updatedData);
+
+        // Save only this income source immediately
+        saveIncome(sourceId, updatedData[key] || '');
     };
 
     const handleKeyDown = (e, sourceId, nextSourceId) => {
@@ -123,47 +122,29 @@ export default function Create({
         }
     };
 
-    const handleSubmit = (e) => {
-        e.preventDefault();
-
-        // Build income entries array from cell data
-        const incomeEntries = [];
-        Object.entries(cellData).forEach(([sourceId, amount]) => {
-            const numAmount = parseFloat(amount);
-            if (!isNaN(numAmount) && numAmount > 0) {
-                incomeEntries.push({
-                    income_source_id: parseInt(sourceId),
-                    amount: numAmount,
-                    description: null,
-                });
-            }
-        });
-
-        if (incomeEntries.length === 0) {
-            alert('Please enter at least one income amount.');
-            return;
-        }
+    const saveIncome = (sourceId, amount) => {
+        const numAmount = parseFloat(amount);
+        const amountToSave = !isNaN(numAmount) && numAmount > 0 ? numAmount : null;
 
         setIsProcessing(true);
 
         router.post(
-            route('income-entries.bulk'),
+            route('income-entries.single'),
             {
-                income_entries: incomeEntries,
+                income_source_id: parseInt(sourceId),
+                amount: amountToSave,
                 month: selectedMonth,
                 year: selectedYear,
             },
             {
                 preserveScroll: true,
+                preserveState: true,
                 onError: (errors) => {
                     console.error('Save errors:', errors);
-                    alert(
-                        'Error saving income. Please check the console for details.',
-                    );
                     setIsProcessing(false);
                 },
                 onSuccess: () => {
-                    setCellData({});
+                    setLastSaved(new Date());
                     setIsProcessing(false);
                 },
                 onFinish: () => {
@@ -260,8 +241,8 @@ export default function Create({
                                     <div className="mt-2 text-3xl font-bold text-green-600 dark:text-green-400">
                                         {formatCurrency(
                                             calculateTotal() ||
-                                                totalIncome ||
-                                                0,
+                                            totalIncome ||
+                                            0,
                                         )}
                                     </div>
                                 </div>
@@ -269,157 +250,151 @@ export default function Create({
                         </div>
                     </div>
 
-                    <form onSubmit={handleSubmit}>
-                        <div className="overflow-hidden rounded-lg bg-white shadow dark:bg-gray-800">
-                            <div className="overflow-x-auto">
-                                <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                                    <thead className="bg-gray-50 dark:bg-gray-700">
-                                        <tr>
-                                            <th className="sticky left-0 z-10 bg-gray-50 px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:bg-gray-700 dark:text-gray-300">
-                                                Income Source
-                                            </th>
-                                            <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-300">
-                                                Amount
-                                            </th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-gray-200 bg-white dark:divide-gray-700 dark:bg-gray-800">
-                                        {incomeSources &&
+                    <div className="overflow-hidden rounded-lg bg-white shadow dark:bg-gray-800">
+                        <div className="overflow-x-auto">
+                            <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                                <thead className="bg-gray-50 dark:bg-gray-700">
+                                    <tr>
+                                        <th className="sticky left-0 z-10 bg-gray-50 px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:bg-gray-700 dark:text-gray-300">
+                                            Income Source
+                                        </th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-300">
+                                            Amount
+                                        </th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-200 bg-white dark:divide-gray-700 dark:bg-gray-800">
+                                    {incomeSources &&
                                         incomeSources.length === 0 ? (
-                                            <tr>
-                                                <td
-                                                    colSpan="2"
-                                                    className="px-6 py-8 text-center text-sm text-gray-500 dark:text-gray-400"
-                                                >
-                                                    No income sources found.
-                                                    Please create income sources
-                                                    first.
-                                                </td>
-                                            </tr>
-                                        ) : (
-                                            incomeSources.map(
-                                                (source, index) => {
-                                                    const cellKey = `${source.id}`;
-                                                    const value =
-                                                        cellData[cellKey] || '';
-                                                    const nextSource =
-                                                        incomeSources[
-                                                            index + 1
-                                                        ];
-                                                    const isFocused =
-                                                        focusedCell === cellKey;
+                                        <tr>
+                                            <td
+                                                colSpan="2"
+                                                className="px-6 py-8 text-center text-sm text-gray-500 dark:text-gray-400"
+                                            >
+                                                No income sources found. Please
+                                                create income sources first.
+                                            </td>
+                                        </tr>
+                                    ) : (
+                                        incomeSources.map((source, index) => {
+                                            const cellKey = `${source.id}`;
+                                            const value =
+                                                cellData[cellKey] || '';
+                                            const nextSource =
+                                                incomeSources[index + 1];
+                                            const isFocused =
+                                                focusedCell === cellKey;
 
-                                                    return (
-                                                        <tr
-                                                            key={source.id}
-                                                            className={`hover:bg-gray-50 dark:hover:bg-gray-700 ${
-                                                                isFocused
-                                                                    ? 'bg-primary-50 dark:bg-primary-900/20'
-                                                                    : ''
-                                                            }`}
-                                                        >
-                                                            <td className="sticky left-0 z-10 whitespace-nowrap bg-white px-6 py-4 text-sm font-medium text-gray-900 dark:bg-gray-800 dark:text-gray-100">
-                                                                <div className="flex items-center gap-2">
-                                                                    <div
-                                                                        className="h-4 w-4 rounded"
-                                                                        style={{
-                                                                            backgroundColor:
-                                                                                source.color ||
-                                                                                '#8B5CF6',
-                                                                        }}
-                                                                    />
-                                                                    <span>
-                                                                        {
-                                                                            source.name
-                                                                        }
-                                                                    </span>
-                                                                </div>
-                                                            </td>
-                                                            <td className="px-6 py-2">
-                                                                <div className="relative">
-                                                                    <input
-                                                                        ref={(
-                                                                            el,
-                                                                        ) => {
-                                                                            if (
-                                                                                el
-                                                                            ) {
-                                                                                inputRefs.current[
-                                                                                    cellKey
-                                                                                ] =
-                                                                                    el;
-                                                                            }
-                                                                        }}
-                                                                        type="text"
-                                                                        value={
-                                                                            value
-                                                                        }
-                                                                        onChange={(
-                                                                            e,
-                                                                        ) =>
-                                                                            handleCellChange(
-                                                                                source.id,
-                                                                                e
-                                                                                    .target
-                                                                                    .value,
-                                                                            )
-                                                                        }
-                                                                        onBlur={() => {
-                                                                            handleCellBlur(
-                                                                                source.id,
-                                                                            );
-                                                                            setFocusedCell(
-                                                                                null,
-                                                                            );
-                                                                        }}
-                                                                        onFocus={() =>
-                                                                            setFocusedCell(
-                                                                                cellKey,
-                                                                            )
-                                                                        }
-                                                                        onKeyDown={(
-                                                                            e,
-                                                                        ) =>
-                                                                            handleKeyDown(
-                                                                                e,
-                                                                                source.id,
-                                                                                nextSource?.id,
-                                                                            )
-                                                                        }
-                                                                        placeholder="0.00 or 10+10+10"
-                                                                        className="w-full rounded-md border-gray-300 bg-white px-3 py-2 pr-16 text-right text-sm font-medium text-gray-900 shadow-sm focus:border-primary-500 focus:ring-primary-500 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100"
-                                                                    />
-                                                                    {value &&
-                                                                        parseFloat(
+                                            return (
+                                                <tr
+                                                    key={source.id}
+                                                    className={`hover:bg-gray-50 dark:hover:bg-gray-700 ${isFocused
+                                                        ? 'bg-primary-50 dark:bg-primary-900/20'
+                                                        : ''
+                                                        }`}
+                                                >
+                                                    <td className="sticky left-0 z-10 whitespace-nowrap bg-white px-6 py-4 text-sm font-medium text-gray-900 dark:bg-gray-800 dark:text-gray-100">
+                                                        <div className="flex items-center gap-2">
+                                                            <div
+                                                                className="h-4 w-4 rounded"
+                                                                style={{
+                                                                    backgroundColor:
+                                                                        source.color ||
+                                                                        '#8B5CF6',
+                                                                }}
+                                                            />
+                                                            <span>{source.name}</span>
+                                                        </div>
+                                                    </td>
+                                                    <td className="px-6 py-2">
+                                                        <div className="relative">
+                                                            <input
+                                                                ref={(el) => {
+                                                                    if (el) {
+                                                                        inputRefs.current[
+                                                                            cellKey
+                                                                        ] = el;
+                                                                    }
+                                                                }}
+                                                                type="text"
+                                                                value={value}
+                                                                onChange={(e) =>
+                                                                    handleCellChange(
+                                                                        source.id,
+                                                                        e.target
+                                                                            .value,
+                                                                    )
+                                                                }
+                                                                onBlur={() => {
+                                                                    handleCellBlur(
+                                                                        source.id,
+                                                                    );
+                                                                    setFocusedCell(
+                                                                        null,
+                                                                    );
+                                                                }}
+                                                                onFocus={() =>
+                                                                    setFocusedCell(
+                                                                        cellKey,
+                                                                    )
+                                                                }
+                                                                onKeyDown={(e) =>
+                                                                    handleKeyDown(
+                                                                        e,
+                                                                        source.id,
+                                                                        nextSource?.id,
+                                                                    )
+                                                                }
+                                                                placeholder="0.00 or 10+10+10"
+                                                                className="w-full rounded-md border-gray-300 bg-white px-3 py-2 pr-16 text-right text-sm font-medium text-gray-900 shadow-sm focus:border-primary-500 focus:ring-primary-500 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100"
+                                                            />
+                                                            {value &&
+                                                                parseFloat(
+                                                                    value,
+                                                                ) >
+                                                                0 && (
+                                                                    <div className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400">
+                                                                        {formatCurrency(
                                                                             value,
-                                                                        ) >
-                                                                            0 && (
-                                                                            <div className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400">
-                                                                                {formatCurrency(
-                                                                                    value,
-                                                                                )}
-                                                                            </div>
                                                                         )}
-                                                                </div>
-                                                            </td>
-                                                        </tr>
-                                                    );
-                                                },
-                                            )
-                                        )}
-                                    </tbody>
-                                </table>
-                            </div>
-                            <div className="flex items-center justify-end gap-4 border-t border-gray-200 bg-gray-50 px-6 py-4 dark:border-gray-700 dark:bg-gray-700">
-                                <PrimaryButton
-                                    type="submit"
-                                    disabled={isProcessing}
-                                >
-                                    {isProcessing ? 'Saving...' : 'Save Income'}
-                                </PrimaryButton>
+                                                                    </div>
+                                                                )}
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <div className="border-t border-gray-200 bg-gray-50 px-6 py-4 dark:border-gray-700 dark:bg-gray-700">
+                            <div className="flex items-center justify-between">
+                                <p className="text-sm text-gray-600 dark:text-gray-400">
+                                    Enter amounts directly in the cells. Press
+                                    Tab or Enter to move to the next row.
+                                    Changes are saved automatically.
+                                </p>
+                                <div className="flex items-center gap-2 text-sm">
+                                    {isProcessing ? (
+                                        <span className="text-primary-600 dark:text-primary-400">
+                                            Saving...
+                                        </span>
+                                    ) : lastSaved ? (
+                                        <span className="text-green-600 dark:text-green-400">
+                                            Saved{' '}
+                                            {lastSaved.toLocaleTimeString()}
+                                        </span>
+                                    ) : (
+                                        <span className="text-gray-400 dark:text-gray-500">
+                                            Ready
+                                        </span>
+                                    )}
+                                </div>
                             </div>
                         </div>
-                    </form>
+                    </div>
                 </div>
             </div>
         </AuthenticatedLayout>

@@ -43,6 +43,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
         [TransactionController::class, 'create']
     )->name('transactions.create');
     Route::post(
+        '/transactions/single',
+        [TransactionController::class, 'storeSingle']
+    )->name('transactions.single');
+    Route::post(
         '/transactions/bulk',
         [TransactionController::class, 'storeBulk']
     )->name('transactions.bulk');
@@ -53,6 +57,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
         '/income-entries/create',
         [IncomeEntryController::class, 'create']
     )->name('income-entries.create');
+    Route::post(
+        '/income-entries/single',
+        [IncomeEntryController::class, 'storeSingle']
+    )->name('income-entries.single');
     Route::post(
         '/income-entries/bulk',
         [IncomeEntryController::class, 'storeBulk']

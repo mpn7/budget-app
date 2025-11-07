@@ -67,6 +67,47 @@ class TransactionController extends Controller
     }
 
     /**
+     * Store or update a single transaction for a category.
+     */
+    public function storeSingle(Request $request)
+    {
+        $validated = $request->validate([
+            'category_id' => [
+                'required',
+                Rule::exists('categories', 'id')->where('user_id', Auth::id()),
+            ],
+            'amount' => 'nullable|numeric|min:0',
+            'month' => 'required|integer|min:1|max:12',
+            'year' => 'required|integer|min:2000|max:2100',
+        ]);
+
+        // Delete existing transactions for this category/month/year
+        Transaction::where('user_id', Auth::id())
+            ->where('category_id', $validated['category_id'])
+            ->where('year', $validated['year'])
+            ->where('month', $validated['month'])
+            ->delete();
+
+        // If amount is provided and > 0, create a new transaction
+        if (isset($validated['amount']) && $validated['amount'] > 0) {
+            Transaction::create([
+                'user_id' => Auth::id(),
+                'category_id' => $validated['category_id'],
+                'amount' => $validated['amount'],
+                'description' => null,
+                'month' => $validated['month'],
+                'year' => $validated['year'],
+            ]);
+        }
+
+        return redirect()
+            ->route('transactions.create', [
+                'year' => $validated['year'],
+                'month' => $validated['month'],
+            ]);
+    }
+
+    /**
      * Store multiple transactions at once.
      */
     public function storeBulk(Request $request)
@@ -124,8 +165,7 @@ class TransactionController extends Controller
             ->route('transactions.create', [
                 'year' => $validated['year'],
                 'month' => $validated['month'],
-            ])
-            ->with('success', count($transactions) . ' expenses saved successfully.');
+            ]);
     }
 
     /**

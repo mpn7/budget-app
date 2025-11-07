@@ -16,7 +16,6 @@ export default function Create({
     const [isProcessing, setIsProcessing] = useState(false);
     const [lastSaved, setLastSaved] = useState(null);
     const inputRefs = useRef({});
-    const saveTimeoutRef = useRef(null);
 
     // Initialize cell data from existing transactions
     useEffect(() => {
@@ -76,6 +75,8 @@ export default function Create({
     const handleCellBlur = (categoryId) => {
         const key = `${categoryId}`;
         const value = cellData[key];
+        let updatedData = { ...cellData };
+
         if (value) {
             // Check if the value contains a + sign (multiple values to sum)
             if (value.includes('+')) {
@@ -87,45 +88,31 @@ export default function Create({
                 });
                 const sum = parts.reduce((total, num) => total + num, 0);
                 if (!isNaN(sum) && sum > 0) {
-                    setCellData((prev) => ({
-                        ...prev,
-                        [key]: sum.toFixed(2),
-                    }));
-                    // Trigger auto-save after calculation
-                    triggerAutoSave();
+                    updatedData[key] = sum.toFixed(2);
                 } else {
                     // If calculation failed, clear the field
-                    setCellData((prev) => ({
-                        ...prev,
-                        [key]: '',
-                    }));
-                    // Trigger auto-save after clearing
-                    triggerAutoSave();
+                    updatedData[key] = '';
                 }
             } else {
                 // Single value - format to 2 decimal places
                 const numValue = parseFloat(value);
                 if (!isNaN(numValue) && numValue > 0) {
-                    setCellData((prev) => ({
-                        ...prev,
-                        [key]: numValue.toFixed(2),
-                    }));
-                    // Trigger auto-save after formatting
-                    triggerAutoSave();
+                    updatedData[key] = numValue.toFixed(2);
                 } else {
                     // Clear invalid values
-                    setCellData((prev) => ({
-                        ...prev,
-                        [key]: '',
-                    }));
-                    // Trigger auto-save after clearing
-                    triggerAutoSave();
+                    updatedData[key] = '';
                 }
             }
         } else {
-            // Field is empty, trigger auto-save to clear any existing data
-            triggerAutoSave();
+            // Field is empty, remove it from data
+            delete updatedData[key];
         }
+
+        // Update state
+        setCellData(updatedData);
+
+        // Save only this category immediately
+        saveExpense(categoryId, updatedData[key] || '');
     };
 
     const handleKeyDown = (e, categoryId, nextCategoryId) => {
@@ -174,36 +161,23 @@ export default function Create({
     const groupedCategories = getGroupedCategories();
     const flatCategories = getFlatCategories();
 
-    const saveExpenses = () => {
-        // Build transactions array from cell data
-        const transactions = [];
-        Object.entries(cellData).forEach(([categoryId, amount]) => {
-            const numAmount = parseFloat(amount);
-            if (!isNaN(numAmount) && numAmount > 0) {
-                transactions.push({
-                    category_id: parseInt(categoryId),
-                    amount: numAmount,
-                    description: null,
-                });
-            }
-        });
-
-        // Only save if there are transactions or if we're clearing data
-        if (transactions.length === 0 && Object.keys(cellData).length === 0) {
-            return; // Don't save empty data
-        }
+    const saveExpense = (categoryId, amount) => {
+        const numAmount = parseFloat(amount);
+        const amountToSave = !isNaN(numAmount) && numAmount > 0 ? numAmount : null;
 
         setIsProcessing(true);
 
         router.post(
-            route('transactions.bulk'),
+            route('transactions.single'),
             {
-                transactions: transactions,
+                category_id: parseInt(categoryId),
+                amount: amountToSave,
                 month: selectedMonth,
                 year: selectedYear,
             },
             {
                 preserveScroll: true,
+                preserveState: true,
                 onError: (errors) => {
                     console.error('Save errors:', errors);
                     setIsProcessing(false);
@@ -218,28 +192,6 @@ export default function Create({
             },
         );
     };
-
-    // Auto-save with debounce
-    const triggerAutoSave = () => {
-        // Clear existing timeout
-        if (saveTimeoutRef.current) {
-            clearTimeout(saveTimeoutRef.current);
-        }
-
-        // Set new timeout to save after 1.5 seconds of inactivity
-        saveTimeoutRef.current = setTimeout(() => {
-            saveExpenses();
-        }, 1500);
-    };
-
-    // Cleanup timeout on unmount
-    useEffect(() => {
-        return () => {
-            if (saveTimeoutRef.current) {
-                clearTimeout(saveTimeoutRef.current);
-            }
-        };
-    }, []);
 
     const formatCurrency = (amount) => {
         if (!amount || amount === '0' || amount === '0.00') return '';
@@ -328,8 +280,8 @@ export default function Create({
                                     <div className="mt-2 text-3xl font-bold text-red-600 dark:text-red-400">
                                         {formatCurrency(
                                             calculateTotal() ||
-                                                totalExpenses ||
-                                                0,
+                                            totalExpenses ||
+                                            0,
                                         )}
                                     </div>
                                 </div>
@@ -397,7 +349,7 @@ export default function Create({
                                                             const cellKey = `${category.id}`;
                                                             const value =
                                                                 cellData[
-                                                                    cellKey
+                                                                cellKey
                                                                 ] || '';
                                                             // Find next category in flat list
                                                             const currentIndex =
@@ -408,8 +360,8 @@ export default function Create({
                                                                 );
                                                             const nextCategory =
                                                                 flatCategories[
-                                                                    currentIndex +
-                                                                        1
+                                                                currentIndex +
+                                                                1
                                                                 ];
                                                             const isFocused =
                                                                 focusedCell ===
@@ -420,11 +372,10 @@ export default function Create({
                                                                     key={
                                                                         category.id
                                                                     }
-                                                                    className={`hover:bg-gray-50 dark:hover:bg-gray-700 ${
-                                                                        isFocused
-                                                                            ? 'bg-primary-50 dark:bg-primary-900/20'
-                                                                            : ''
-                                                                    }`}
+                                                                    className={`hover:bg-gray-50 dark:hover:bg-gray-700 ${isFocused
+                                                                        ? 'bg-primary-50 dark:bg-primary-900/20'
+                                                                        : ''
+                                                                        }`}
                                                                 >
                                                                     <td className="sticky left-0 z-10 whitespace-nowrap bg-white px-6 py-4 pl-12 text-sm font-medium text-gray-900 dark:bg-gray-800 dark:text-gray-100">
                                                                         <div className="flex items-center gap-2">
@@ -501,7 +452,7 @@ export default function Create({
                                                                                 parseFloat(
                                                                                     value,
                                                                                 ) >
-                                                                                    0 && (
+                                                                                0 && (
                                                                                     <div className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400">
                                                                                         {formatCurrency(
                                                                                             value,

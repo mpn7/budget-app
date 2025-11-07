@@ -64,6 +64,47 @@ class IncomeEntryController extends Controller
     }
 
     /**
+     * Store or update a single income entry for an income source.
+     */
+    public function storeSingle(Request $request)
+    {
+        $validated = $request->validate([
+            'income_source_id' => [
+                'required',
+                Rule::exists('income_sources', 'id')->where('user_id', Auth::id()),
+            ],
+            'amount' => 'nullable|numeric|min:0',
+            'month' => 'required|integer|min:1|max:12',
+            'year' => 'required|integer|min:2000|max:2100',
+        ]);
+
+        // Delete existing income entries for this source/month/year
+        IncomeEntry::where('user_id', Auth::id())
+            ->where('income_source_id', $validated['income_source_id'])
+            ->where('year', $validated['year'])
+            ->where('month', $validated['month'])
+            ->delete();
+
+        // If amount is provided and > 0, create a new income entry
+        if (isset($validated['amount']) && $validated['amount'] > 0) {
+            IncomeEntry::create([
+                'user_id' => Auth::id(),
+                'income_source_id' => $validated['income_source_id'],
+                'amount' => $validated['amount'],
+                'description' => null,
+                'month' => $validated['month'],
+                'year' => $validated['year'],
+            ]);
+        }
+
+        return redirect()
+            ->route('income-entries.create', [
+                'year' => $validated['year'],
+                'month' => $validated['month'],
+            ]);
+    }
+
+    /**
      * Store multiple income entries at once.
      */
     public function storeBulk(Request $request)
