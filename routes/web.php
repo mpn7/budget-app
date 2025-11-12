@@ -39,6 +39,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     // Transactions
     Route::get(
+        '/transactions',
+        [TransactionController::class, 'index']
+    )->name('transactions.index');
+    Route::get(
         '/transactions/create',
         [TransactionController::class, 'create']
     )->name('transactions.create');
@@ -46,13 +50,12 @@ Route::middleware(['auth', 'verified'])->group(function () {
         '/transactions/single',
         [TransactionController::class, 'storeSingle']
     )->name('transactions.single');
-    Route::post(
-        '/transactions/bulk',
-        [TransactionController::class, 'storeBulk']
-    )->name('transactions.bulk');
-    Route::apiResource('transactions', TransactionController::class);
 
     // Income Entries
+    Route::get(
+        '/income-entries',
+        [IncomeEntryController::class, 'index']
+    )->name('income-entries.index');
     Route::get(
         '/income-entries/create',
         [IncomeEntryController::class, 'create']
@@ -61,11 +64,6 @@ Route::middleware(['auth', 'verified'])->group(function () {
         '/income-entries/single',
         [IncomeEntryController::class, 'storeSingle']
     )->name('income-entries.single');
-    Route::post(
-        '/income-entries/bulk',
-        [IncomeEntryController::class, 'storeBulk']
-    )->name('income-entries.bulk');
-    Route::apiResource('income-entries', IncomeEntryController::class);
 
     // Starting Balance
     Route::post(
