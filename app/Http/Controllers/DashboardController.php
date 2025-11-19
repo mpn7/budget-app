@@ -312,6 +312,94 @@ class DashboardController extends Controller
         $currentTotalInvestments = $monthlyData[count($monthlyData) - 1]['totalInvestments'] ?? $initialInvestmentAmount;
         $netWorth = $currentBalance + $currentTotalInvestments;
 
+        // Calculate trends for the most recent complete month
+        $currentMonth = (int) date('n');
+        $lastCompleteMonth = $currentMonth > 1 ? $currentMonth - 1 : 12;
+        $lastCompleteYear = $currentMonth > 1 ? $year : $year - 1;
+
+        // Get current month data
+        $currentMonthExpenses = Transaction::where('user_id', $user->id)
+            ->where('year', $year)
+            ->where('month', $currentMonth)
+            ->sum('amount');
+
+        $currentMonthIncome = IncomeEntry::where('user_id', $user->id)
+            ->where('year', $year)
+            ->where('month', $currentMonth)
+            ->sum('amount');
+
+        // Get previous month data
+        $previousMonthExpenses = Transaction::where('user_id', $user->id)
+            ->where('year', $lastCompleteYear)
+            ->where('month', $lastCompleteMonth)
+            ->sum('amount');
+
+        $previousMonthIncome = IncomeEntry::where('user_id', $user->id)
+            ->where('year', $lastCompleteYear)
+            ->where('month', $lastCompleteMonth)
+            ->sum('amount');
+
+        // Get last year same month data for YoY comparison
+        $lastYearMonth = $month ?: $currentMonth;
+        $lastYearExpenses = Transaction::where('user_id', $user->id)
+            ->where('year', $year - 1)
+            ->where('month', $lastYearMonth)
+            ->sum('amount');
+
+        $lastYearIncome = IncomeEntry::where('user_id', $user->id)
+            ->where('year', $year - 1)
+            ->where('month', $lastYearMonth)
+            ->sum('amount');
+
+        // Calculate percentage changes
+        $expensesMoMChange = $previousMonthExpenses > 0
+            ? (($currentMonthExpenses - $previousMonthExpenses) / $previousMonthExpenses) * 100
+            : 0;
+
+        $incomeMoMChange = $previousMonthIncome > 0
+            ? (($currentMonthIncome - $previousMonthIncome) / $previousMonthIncome) * 100
+            : 0;
+
+        $expensesYoYChange = $lastYearExpenses > 0
+            ? (($currentMonthExpenses - $lastYearExpenses) / $lastYearExpenses) * 100
+            : 0;
+
+        $incomeYoYChange = $lastYearIncome > 0
+            ? (($currentMonthIncome - $lastYearIncome) / $lastYearIncome) * 100
+            : 0;
+
+        // Get previous month's investment and net worth data
+        $previousMonthData = null;
+        if ($currentMonth > 1) {
+            $previousMonthData = $monthlyData[$currentMonth - 2] ?? null;
+        } elseif ($currentMonth === 1 && $year > date('Y') - 5) {
+            // Get December of previous year if available - would need to fetch from previous year's data
+            // For now, use initial values
+            $previousMonthData = null;
+        }
+
+        $previousNetWorth = $previousMonthData ? ($previousMonthData['netWorth'] ?? 0) : 0;
+        $previousInvestments = $previousMonthData ? ($previousMonthData['totalInvestments'] ?? 0) : 0;
+
+        // Calculate percentage changes with proper handling of zero values
+        // When going from 0 to positive, show as 100% increase
+        // When going from positive to 0, show as -100% decrease
+        if ($previousNetWorth > 0) {
+            $netWorthChange = (($netWorth - $previousNetWorth) / $previousNetWorth) * 100;
+        } elseif ($netWorth > 0 && $previousNetWorth == 0) {
+            $netWorthChange = 100; // Started from nothing, now have something
+        } else {
+            $netWorthChange = 0; // Both are zero or current is zero
+        }
+
+        if ($previousInvestments > 0) {
+            $investmentsChange = (($currentTotalInvestments - $previousInvestments) / $previousInvestments) * 100;
+        } elseif ($currentTotalInvestments > 0 && $previousInvestments == 0) {
+            $investmentsChange = 100; // Started investing
+        } else {
+            $investmentsChange = 0;
+        }
+
         return Inertia::render('Dashboard', [
             'year' => (int) $year,
             'month' => $month ? (int) $month : null,
@@ -326,6 +414,20 @@ class DashboardController extends Controller
                 'net' => (float) $net,
                 'currentBalance' => (float) $currentBalance,
                 'netWorth' => (float) $netWorth,
+            ],
+            'trends' => [
+                'currentMonthExpenses' => (float) $currentMonthExpenses,
+                'previousMonthExpenses' => (float) $previousMonthExpenses,
+                'expensesMoMChange' => round($expensesMoMChange, 1),
+                'currentMonthIncome' => (float) $currentMonthIncome,
+                'previousMonthIncome' => (float) $previousMonthIncome,
+                'incomeMoMChange' => round($incomeMoMChange, 1),
+                'expensesYoYChange' => round($expensesYoYChange, 1),
+                'incomeYoYChange' => round($incomeYoYChange, 1),
+                'netWorthChange' => round($netWorthChange, 1),
+                'previousNetWorth' => (float) $previousNetWorth,
+                'investmentsChange' => round($investmentsChange, 1),
+                'previousInvestments' => (float) $previousInvestments,
             ],
             'monthlyData' => $monthlyData,
             'categoryBreakdown' => $categoryBreakdown,

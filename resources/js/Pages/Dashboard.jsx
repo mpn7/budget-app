@@ -7,6 +7,7 @@ export default function Dashboard({
     year,
     month,
     summary,
+    trends,
     monthlyData,
     categoryBreakdown,
     startingBalance,
@@ -34,7 +35,33 @@ export default function Dashboard({
         );
     };
 
+    // Trend indicator component
+    const TrendIndicator = ({ value, label }) => {
+        if (!value || value === 0) return null;
 
+        const isPositive = value > 0;
+        // Determine if the trend is good based on the metric
+        // expenses: lower is better (decrease is good)
+        // income, investments, networth: higher is better (increase is good)
+        const isGood = (label === 'expenses') ? !isPositive : isPositive;
+
+        return (
+            <div className={`mt-1 flex items-center text-xs ${isGood ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'
+                }`}>
+                {isPositive ? (
+                    <svg className="mr-1 h-3 w-3" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M5.293 9.707a1 1 0 010-1.414l4-4a1 1 0 011.414 0l4 4a1 1 0 01-1.414 1.414L11 7.414V15a1 1 0 11-2 0V7.414L6.707 9.707a1 1 0 01-1.414 0z" clipRule="evenodd" />
+                    </svg>
+                ) : (
+                    <svg className="mr-1 h-3 w-3" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M14.707 10.293a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 111.414-1.414L9 12.586V5a1 1 0 012 0v7.586l2.293-2.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                    </svg>
+                )}
+                <span className="font-medium">{Math.abs(value).toFixed(1)}%</span>
+                <span className="ml-1 text-gray-500 dark:text-gray-400">vs last month</span>
+            </div>
+        );
+    };
 
     return (
         <AuthenticatedLayout
@@ -89,7 +116,7 @@ export default function Dashboard({
             <Head title="Dashboard" />
 
             <div className="py-6">
-                <div className="mx-auto max-w-7xl sm:px-6 lg:px-8">
+                <div className="mx-auto max-w-[1560px] sm:px-6 lg:px-8">
                     {/* Summary Cards */}
                     <div className="mb-6 grid gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3">
                         <div className="overflow-hidden rounded-lg bg-white shadow dark:bg-gray-800">
@@ -116,6 +143,7 @@ export default function Dashboard({
                                         summary.totalInvestments || 0,
                                     )}
                                 </div>
+                                {trends && <TrendIndicator value={trends.investmentsChange} label="investments" />}
                             </div>
                         </div>
                         <div className="overflow-hidden rounded-lg bg-white shadow dark:bg-gray-800">
@@ -126,6 +154,7 @@ export default function Dashboard({
                                 <div className="mt-2 text-2xl font-bold text-indigo-600 dark:text-indigo-400">
                                     {formatCurrency(summary.netWorth || 0)}
                                 </div>
+                                {trends && <TrendIndicator value={trends.netWorthChange} label="networth" />}
                             </div>
                         </div>
                     </div>
@@ -138,6 +167,7 @@ export default function Dashboard({
                                 <div className="mt-2 text-3xl font-bold text-red-600 dark:text-red-400">
                                     {formatCurrency(summary.totalExpenses)}
                                 </div>
+                                {trends && <TrendIndicator value={trends.expensesMoMChange} label="expenses" />}
                             </div>
                         </div>
                         <div className="overflow-hidden rounded-lg bg-white shadow dark:bg-gray-800">
@@ -163,7 +193,7 @@ export default function Dashboard({
                             <h3 className="mb-4 text-lg font-semibold text-gray-900 dark:text-gray-100">
                                 Monthly Overview
                             </h3>
-                            <div className="space-y-2">
+                            <div className="divide-y divide-gray-200 dark:divide-gray-700">
                                 {monthlyData.map((data) => {
                                     const maxValue = Math.max(
                                         ...monthlyData.map((d) =>
@@ -178,13 +208,13 @@ export default function Dashboard({
                                     return (
                                         <div
                                             key={data.month}
-                                            className="flex items-center gap-4"
+                                            className="flex items-center gap-4 py-4 first:pt-0 last:pb-0"
                                         >
-                                            <div className="w-20 text-sm font-medium text-gray-700 dark:text-gray-300">
-                                                {data.monthName.substring(0, 3)}
+                                            <div className="w-24 text-sm font-semibold text-gray-700 dark:text-gray-300">
+                                                {data.monthName}
                                             </div>
                                             <div className="flex-1">
-                                                <div className="mb-1 flex gap-1">
+                                                <div className="mb-2 flex gap-1">
                                                     <div
                                                         className="h-6 rounded-l bg-green-500"
                                                         style={{

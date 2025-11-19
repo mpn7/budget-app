@@ -65,8 +65,8 @@ export default function Create({
 
     const handleCellChange = (categoryId, value) => {
         const key = `${categoryId}`;
-        // Allow numbers, decimal points, and + signs for calculations
-        const cleaned = value.replace(/[^0-9.+]/g, '');
+        // Allow numbers, decimal points, and math operators (+, -, *, /)
+        const cleaned = value.replace(/[^0-9.+\-*/]/g, '');
         setCellData((prev) => ({
             ...prev,
             [key]: cleaned,
@@ -79,20 +79,35 @@ export default function Create({
         let updatedData = { ...cellData };
 
         if (value) {
-            // Check if the value contains a + sign (multiple values to sum)
-            if (value.includes('+')) {
-                // Split by + and sum all values
-                const parts = value.split('+').map((part) => {
-                    // Remove any whitespace and parse
-                    const cleaned = part.trim().replace(/[^0-9.]/g, '');
-                    return parseFloat(cleaned) || 0;
-                });
-                const sum = parts.reduce((total, num) => total + num, 0);
-                if (!isNaN(sum) && sum > 0) {
-                    updatedData[key] = sum.toFixed(2);
-                } else {
-                    // If calculation failed, clear the field
-                    updatedData[key] = '';
+            // Check if the value contains any math operators
+            if (value.match(/[+\-*/]/)) {
+                try {
+                    // Evaluate the mathematical expression
+                    // Using Function constructor for safe evaluation of simple math
+                    const result = Function('"use strict"; return (' + value + ')')();
+                    if (!isNaN(result) && result > 0) {
+                        updatedData[key] = result.toFixed(2);
+                    } else {
+                        // If calculation resulted in 0 or negative, clear the field
+                        updatedData[key] = '';
+                    }
+                } catch (e) {
+                    // If evaluation failed, try legacy + operator approach
+                    if (value.includes('+')) {
+                        const parts = value.split('+').map((part) => {
+                            const cleaned = part.trim().replace(/[^0-9.]/g, '');
+                            return parseFloat(cleaned) || 0;
+                        });
+                        const sum = parts.reduce((total, num) => total + num, 0);
+                        if (!isNaN(sum) && sum > 0) {
+                            updatedData[key] = sum.toFixed(2);
+                        } else {
+                            updatedData[key] = '';
+                        }
+                    } else {
+                        // Clear invalid expressions
+                        updatedData[key] = '';
+                    }
                 }
             } else {
                 // Single value - format to 2 decimal places
@@ -312,7 +327,6 @@ export default function Create({
                                                     {/* Parent Category Header */}
                                                     <tr className="bg-primary-50 dark:bg-primary-900/20">
                                                         <td
-                                                            colSpan="2"
                                                             className="sticky left-0 z-10 px-6 py-3 text-sm font-bold text-gray-900 dark:text-gray-100"
                                                         >
                                                             <div className="flex items-center gap-2">
@@ -331,6 +345,19 @@ export default function Create({
                                                                         .name
                                                                 }
                                                             </div>
+                                                        </td>
+                                                        <td className="px-6 py-3 text-right text-sm font-semibold text-gray-500 dark:text-gray-400">
+                                                            {(() => {
+                                                                const subtotal = group.children.reduce(
+                                                                    (sum, child) => {
+                                                                        const val = cellData[`${child.id}`];
+                                                                        const num = parseFloat(val);
+                                                                        return sum + (isNaN(num) ? 0 : num);
+                                                                    },
+                                                                    0
+                                                                );
+                                                                return subtotal > 0 ? formatCurrency(subtotal) : '—';
+                                                            })()}
                                                         </td>
                                                     </tr>
                                                     {/* Subcategories */}
@@ -435,7 +462,7 @@ export default function Create({
                                                                                         nextCategory?.id,
                                                                                     )
                                                                                 }
-                                                                                placeholder="0.00 or 10+10+10"
+                                                                                placeholder="e.g. 100 or 10+10 or 500-50 or 4*250"
                                                                                 className="w-full rounded-md border-gray-300 bg-white px-3 py-2 pr-16 text-right text-sm font-medium text-gray-900 shadow-sm focus:border-primary-500 focus:ring-primary-500 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100"
                                                                             />
                                                                             {value &&
@@ -478,9 +505,8 @@ export default function Create({
                         <div className="border-t border-gray-200 bg-gray-50 px-6 py-4 dark:border-gray-700 dark:bg-gray-700">
                             <div className="flex items-center justify-between">
                                 <p className="text-sm text-gray-600 dark:text-gray-400">
-                                    Enter amounts directly in the cells. Press
-                                    Tab or Enter to move to the next row.
-                                    Changes are saved automatically.
+                                    Enter amounts or use math: <span className="font-mono text-xs">100+50</span>, <span className="font-mono text-xs">500-50</span>, <span className="font-mono text-xs">4*250</span>, <span className="font-mono text-xs">1000/2</span>. 
+                                    Press Tab/Enter to save and move to next row.
                                 </p>
                                 <div className="flex items-center gap-2 text-sm">
                                     {isProcessing ? (
