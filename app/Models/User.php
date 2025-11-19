@@ -71,4 +71,9 @@ class User extends Authenticatable
     {
         return $this->hasMany(StartingBalance::class);
     }
+
+    public function investments(): HasMany
+    {
+        return $this->hasMany(Investment::class);
+    }
 }

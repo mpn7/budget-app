@@ -4,7 +4,9 @@ use App\Http\Controllers\CategoryController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\IncomeEntryController;
 use App\Http\Controllers\IncomeSourceController;
+use App\Http\Controllers\InvestmentController;
 use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\SettingsController;
 use App\Http\Controllers\StartingBalanceController;
 use App\Http\Controllers\TransactionController;
 use Illuminate\Foundation\Application;
@@ -65,11 +67,28 @@ Route::middleware(['auth', 'verified'])->group(function () {
         [IncomeEntryController::class, 'storeSingle']
     )->name('income-entries.single');
 
-    // Starting Balance
+    // Settings
+    Route::get('/settings', [SettingsController::class, 'index'])->name('settings.index');
+    Route::post(
+        '/settings/starting-balance',
+        [SettingsController::class, 'storeStartingBalance']
+    )->name('settings.starting-balance');
+    Route::post(
+        '/settings/initial-investment',
+        [SettingsController::class, 'storeInitialInvestment']
+    )->name('settings.initial-investment');
+
+    // Starting Balance (kept for backward compatibility, redirects to settings)
     Route::post(
         '/starting-balance',
         [StartingBalanceController::class, 'store']
     )->name('starting-balance.store');
+
+    // Initial Investment (kept for backward compatibility, redirects to settings)
+    Route::post(
+        '/investment',
+        [InvestmentController::class, 'store']
+    )->name('investment.store');
 
     // Profile
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');

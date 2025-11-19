@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Category;
 use App\Models\IncomeEntry;
 use App\Models\IncomeSource;
+use App\Models\Investment;
 use App\Models\StartingBalance;
 use App\Models\Transaction;
 use Illuminate\Http\Request;
@@ -61,38 +62,119 @@ class DashboardController extends Controller
 
         $startingBalanceAmount = $startingBalance ? (float) $startingBalance->amount : 0;
 
+        // Get initial investment for the year
+        $initialInvestment = Investment::where('user_id', $user->id)
+            ->where('year', $year)
+            ->first();
+
+        $initialInvestmentAmount = $initialInvestment ? (float) $initialInvestment->amount : 0;
+
+        // Get investment category IDs (both parent and child categories marked as investment)
+        $investmentCategoryIds = Category::where('user_id', $user->id)
+            ->where('is_investment', true)
+            ->pluck('id')
+            ->toArray();
+
+        // Get all categories with their parents for checking parent investment status
+        $allCategories = Category::where('user_id', $user->id)
+            ->with('parent')
+            ->get()
+            ->keyBy('id');
+
+        // Helper function to check if a category is an investment
+        $isInvestmentCategory = function ($categoryId) use ($investmentCategoryIds, $allCategories) {
+            // Check if the category itself is marked as investment
+            if (in_array($categoryId, $investmentCategoryIds)) {
+                return true;
+            }
+
+            // Check if the parent category is marked as investment
+            $category = $allCategories->get($categoryId);
+            if ($category && $category->parent_id) {
+                $parent = $allCategories->get($category->parent_id);
+                if ($parent && $parent->is_investment) {
+                    return true;
+                }
+            }
+
+            return false;
+        };
+
+        // Get investment transactions (these will be counted as both expenses and investments)
+        $investmentTransactions = $transactions->filter(function ($transaction) use ($isInvestmentCategory) {
+            return $isInvestmentCategory($transaction->category_id);
+        });
+
         // Calculate totals
-        $totalExpenses = $transactions->sum('amount');
+        // Separate regular expenses from investment transactions for reporting
+        $regularExpenseTransactions = $transactions->filter(function ($transaction) use ($isInvestmentCategory) {
+            return !$isInvestmentCategory($transaction->category_id);
+        });
+
+        // Total expenses for reporting (excluding investments)
+        $totalExpenses = $regularExpenseTransactions->sum('amount');
+        // All expenses including investments (for balance calculation)
+        $totalExpensesIncludingInvestments = $transactions->sum('amount');
+
         $totalIncome = $incomeEntries->sum('amount');
         $net = $totalIncome - $totalExpenses;
+
+        // Calculate total investments: initial investment + investment transactions
+        $totalInvestments = $initialInvestmentAmount + $investmentTransactions->sum('amount');
 
         // Monthly breakdown with running balance
         $monthlyData = [];
         $runningBalance = $startingBalanceAmount;
+        $runningInvestments = $initialInvestmentAmount;
         for ($m = 1; $m <= 12; $m++) {
-            $monthExpenses = Transaction::where('user_id', $user->id)
+            // Get all transactions for this month
+            $monthAllTransactions = Transaction::where('user_id', $user->id)
                 ->where('year', $year)
                 ->where('month', $m)
-                ->sum('amount');
+                ->get();
+
+            // Separate regular expenses from investment transactions for reporting
+            $monthRegularExpenseTransactions = $monthAllTransactions->filter(function ($transaction) use ($isInvestmentCategory) {
+                return !$isInvestmentCategory($transaction->category_id);
+            });
+            $monthExpenses = $monthRegularExpenseTransactions->sum('amount');
+
+            // Investment transactions are tracked separately
+            $monthInvestmentTransactions = $monthAllTransactions->filter(function ($transaction) use ($isInvestmentCategory) {
+                return $isInvestmentCategory($transaction->category_id);
+            });
+            $monthInvestments = $monthInvestmentTransactions->sum('amount');
 
             $monthIncome = IncomeEntry::where('user_id', $user->id)
                 ->where('year', $year)
                 ->where('month', $m)
                 ->sum('amount');
 
+            // Net for reporting (income minus regular expenses only)
             $monthNet = (float) $monthIncome - (float) $monthExpenses;
 
-            // Calculate running balance: previous balance + income - expenses
-            $runningBalance += $monthNet;
+            // Net for balance calculation (income minus ALL expenses including investments)
+            // This is what actually leaves/enters the bank account
+            $monthNetForBalance = (float) $monthIncome - (float) $monthAllTransactions->sum('amount');
+
+            // Calculate running balance: previous balance + income - ALL expenses (including investments)
+            // Investments reduce the balance because money leaves the bank account
+            $runningBalance += $monthNetForBalance;
+
+            // Calculate running investments: previous investments + new investment transactions
+            $runningInvestments += (float) $monthInvestments;
 
             $monthlyData[] = [
                 'month' => $m,
                 'monthName' => date('F', mktime(0, 0, 0, $m, 1)),
                 'expenses' => (float) $monthExpenses,
                 'income' => (float) $monthIncome,
+                'investments' => (float) $monthInvestments,
                 'net' => $monthNet,
                 'netSavings' => $monthNet, // Net savings is the same as net
                 'balance' => (float) $runningBalance,
+                'totalInvestments' => (float) $runningInvestments,
+                'netWorth' => (float) $runningBalance + (float) $runningInvestments,
             ];
         }
 
@@ -116,9 +198,11 @@ class DashboardController extends Controller
                     $subTransactions->where('month', $month);
                 }
 
-                $subTotal = $subTransactions->sum('amount');
+                // Count all transactions as expenses (including investments)
+                $subTransactionsList = $subTransactions->get();
+                $subTotal = $subTransactionsList->sum('amount');
 
-                // Get months that have expenses for this subcategory
+                // Get months that have expenses for this subcategory (including investments)
                 $subMonthsWithExpenses = Transaction::where('user_id', $user->id)
                     ->where('year', $year)
                     ->where('category_id', $subcategory->id)
@@ -199,7 +283,7 @@ class DashboardController extends Controller
             for ($m = 1; $m <= 12; $m++) {
                 $monthTotal = 0;
 
-                // Sum all subcategory expenses for this month
+                // Sum all subcategory expenses for this month (including investments)
                 foreach ($category->children as $subcategory) {
                     $monthExpenses = Transaction::where('user_id', $user->id)
                         ->where('year', $year)
@@ -224,17 +308,24 @@ class DashboardController extends Controller
             ];
         }
 
+        $currentBalance = $monthlyData[count($monthlyData) - 1]['balance'] ?? $startingBalanceAmount;
+        $currentTotalInvestments = $monthlyData[count($monthlyData) - 1]['totalInvestments'] ?? $initialInvestmentAmount;
+        $netWorth = $currentBalance + $currentTotalInvestments;
+
         return Inertia::render('Dashboard', [
             'year' => (int) $year,
             'month' => $month ? (int) $month : null,
             'categories' => $categories,
             'incomeSources' => $incomeSources,
             'startingBalance' => $startingBalanceAmount,
+            'initialInvestment' => $initialInvestmentAmount,
             'summary' => [
                 'totalIncome' => (float) $totalIncome,
                 'totalExpenses' => (float) $totalExpenses,
+                'totalInvestments' => (float) $totalInvestments,
                 'net' => (float) $net,
-                'currentBalance' => $monthlyData[count($monthlyData) - 1]['balance'] ?? $startingBalanceAmount,
+                'currentBalance' => (float) $currentBalance,
+                'netWorth' => (float) $netWorth,
             ],
             'monthlyData' => $monthlyData,
             'categoryBreakdown' => $categoryBreakdown,

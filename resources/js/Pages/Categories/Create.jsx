@@ -8,6 +8,7 @@ export default function Create({ parentCategories }) {
         color: '#8B5CF6',
         parent_id: null,
         order: 0,
+        is_investment: false,
     });
 
     const submit = (e) => {
@@ -169,6 +170,32 @@ export default function Create({ parentCategories }) {
                                             placeholder="#8B5CF6"
                                         />
                                     </div>
+                                </div>
+
+                                <div>
+                                    <label className="flex items-center">
+                                        <input
+                                            type="checkbox"
+                                            checked={form.data.is_investment}
+                                            onChange={(e) =>
+                                                form.setData(
+                                                    'is_investment',
+                                                    e.target.checked,
+                                                )
+                                            }
+                                            className="mr-2 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                                        />
+                                        <span className="text-sm text-gray-700 dark:text-gray-300">
+                                            Mark as Investment Category
+                                        </span>
+                                    </label>
+                                    <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                        Transactions in this category will be
+                                        treated as investments, not expenses.
+                                        They will be added to your total
+                                        investments and included in net worth
+                                        calculations.
+                                    </p>
                                 </div>
                             </div>
 

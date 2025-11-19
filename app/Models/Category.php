@@ -14,6 +14,11 @@ class Category extends Model
         'name',
         'color',
         'order',
+        'is_investment',
+    ];
+
+    protected $casts = [
+        'is_investment' => 'boolean',
     ];
 
     public function user(): BelongsTo

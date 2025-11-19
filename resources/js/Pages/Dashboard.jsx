@@ -1,6 +1,6 @@
-import PrimaryButton from '@/Components/PrimaryButton';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
-import { Head, router, useForm } from '@inertiajs/react';
+import { formatCurrency } from '@/utils/currency';
+import { Head, router } from '@inertiajs/react';
 import { useState } from 'react';
 
 export default function Dashboard({
@@ -10,16 +10,11 @@ export default function Dashboard({
     monthlyData,
     categoryBreakdown,
     startingBalance,
+    initialInvestment,
     expensesPerCategoryPerMonth,
 }) {
     const [selectedYear, setSelectedYear] = useState(year);
     const [selectedMonth, setSelectedMonth] = useState(month);
-    const [showBalanceModal, setShowBalanceModal] = useState(false);
-
-    const balanceForm = useForm({
-        amount: startingBalance || '',
-        year: selectedYear,
-    });
 
     const handleYearChange = (newYear) => {
         setSelectedYear(newYear);
@@ -39,23 +34,7 @@ export default function Dashboard({
         );
     };
 
-    const formatCurrency = (amount) => {
-        return new Intl.NumberFormat('en-US', {
-            style: 'currency',
-            currency: 'USD',
-        }).format(amount);
-    };
 
-    const handleBalanceSubmit = (e) => {
-        e.preventDefault();
-        balanceForm.setData('year', selectedYear);
-        balanceForm.post(route('starting-balance.store'), {
-            preserveScroll: true,
-            onSuccess: () => {
-                setShowBalanceModal(false);
-            },
-        });
-    };
 
     return (
         <AuthenticatedLayout
@@ -112,37 +91,17 @@ export default function Dashboard({
             <div className="py-6">
                 <div className="mx-auto max-w-7xl sm:px-6 lg:px-8">
                     {/* Summary Cards */}
-                    <div className="mb-6 grid gap-6 md:grid-cols-4">
-                        <div className="overflow-hidden rounded-lg bg-white shadow dark:bg-gray-800">
-                            <div className="p-6">
-                                <div className="text-sm font-medium text-gray-500 dark:text-gray-400">
-                                    Starting Balance
-                                </div>
-                                <div className="mt-2 flex items-center justify-between">
-                                    <div className="text-3xl font-bold text-gray-900 dark:text-gray-100">
-                                        {formatCurrency(startingBalance || 0)}
-                                    </div>
-                                    <button
-                                        onClick={() =>
-                                            setShowBalanceModal(true)
-                                        }
-                                        className="text-xs text-primary-600 hover:text-primary-700 dark:text-primary-400"
-                                    >
-                                        Edit
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
+                    <div className="mb-6 grid gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3">
                         <div className="overflow-hidden rounded-lg bg-white shadow dark:bg-gray-800">
                             <div className="p-6">
                                 <div className="text-sm font-medium text-gray-500 dark:text-gray-400">
                                     Current Balance
                                 </div>
-                                <div className="mt-2 text-3xl font-bold text-blue-600 dark:text-blue-400">
+                                <div className="mt-2 text-2xl font-bold text-blue-600 dark:text-blue-400">
                                     {formatCurrency(
                                         summary.currentBalance ||
-                                            startingBalance ||
-                                            0,
+                                        startingBalance ||
+                                        0,
                                     )}
                                 </div>
                             </div>
@@ -150,13 +109,27 @@ export default function Dashboard({
                         <div className="overflow-hidden rounded-lg bg-white shadow dark:bg-gray-800">
                             <div className="p-6">
                                 <div className="text-sm font-medium text-gray-500 dark:text-gray-400">
-                                    Total Income
+                                    Total Investments
                                 </div>
-                                <div className="mt-2 text-3xl font-bold text-green-600 dark:text-green-400">
-                                    {formatCurrency(summary.totalIncome)}
+                                <div className="mt-2 text-2xl font-bold text-purple-600 dark:text-purple-400">
+                                    {formatCurrency(
+                                        summary.totalInvestments || 0,
+                                    )}
                                 </div>
                             </div>
                         </div>
+                        <div className="overflow-hidden rounded-lg bg-white shadow dark:bg-gray-800">
+                            <div className="p-6">
+                                <div className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                                    Net Worth
+                                </div>
+                                <div className="mt-2 text-2xl font-bold text-indigo-600 dark:text-indigo-400">
+                                    {formatCurrency(summary.netWorth || 0)}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div className="mb-6 grid gap-6 md:grid-cols-2">
                         <div className="overflow-hidden rounded-lg bg-white shadow dark:bg-gray-800">
                             <div className="p-6">
                                 <div className="text-sm font-medium text-gray-500 dark:text-gray-400">
@@ -164,6 +137,21 @@ export default function Dashboard({
                                 </div>
                                 <div className="mt-2 text-3xl font-bold text-red-600 dark:text-red-400">
                                     {formatCurrency(summary.totalExpenses)}
+                                </div>
+                            </div>
+                        </div>
+                        <div className="overflow-hidden rounded-lg bg-white shadow dark:bg-gray-800">
+                            <div className="p-6">
+                                <div className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                                    Net
+                                </div>
+                                <div
+                                    className={`mt-2 text-3xl font-bold ${summary.net >= 0
+                                        ? 'text-green-600 dark:text-green-400'
+                                        : 'text-red-600 dark:text-red-400'
+                                        }`}
+                                >
+                                    {formatCurrency(summary.net || 0)}
                                 </div>
                             </div>
                         </div>
@@ -343,7 +331,7 @@ export default function Dashboard({
                                     </thead>
                                     <tbody className="divide-y divide-gray-200 bg-white dark:divide-gray-700 dark:bg-gray-800">
                                         {expensesPerCategoryPerMonth &&
-                                        expensesPerCategoryPerMonth.length >
+                                            expensesPerCategoryPerMonth.length >
                                             0 ? (
                                             <>
                                                 {expensesPerCategoryPerMonth.map(
@@ -380,10 +368,10 @@ export default function Dashboard({
                                                                         className="whitespace-nowrap px-4 py-3 text-right text-sm text-gray-900 dark:text-gray-100"
                                                                     >
                                                                         {amount >
-                                                                        0
+                                                                            0
                                                                             ? formatCurrency(
-                                                                                  amount,
-                                                                              )
+                                                                                amount,
+                                                                            )
                                                                             : '-'}
                                                                     </td>
                                                                 ),
@@ -411,7 +399,7 @@ export default function Dashboard({
                                                                         sum +
                                                                         cat
                                                                             .monthlyExpenses[
-                                                                            index
+                                                                        index
                                                                         ],
                                                                     0,
                                                                 );
@@ -459,60 +447,6 @@ export default function Dashboard({
                 </div>
             </div>
 
-            {/* Starting Balance Modal */}
-            {showBalanceModal && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
-                    <div className="w-full max-w-md rounded-lg bg-white p-6 shadow-xl dark:bg-gray-800">
-                        <h3 className="mb-4 text-lg font-semibold text-gray-900 dark:text-gray-100">
-                            Set Starting Balance for {selectedYear}
-                        </h3>
-                        <form onSubmit={handleBalanceSubmit}>
-                            <div className="space-y-4">
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                                        Starting Balance
-                                    </label>
-                                    <input
-                                        type="number"
-                                        step="0.01"
-                                        value={balanceForm.data.amount}
-                                        onChange={(e) =>
-                                            balanceForm.setData(
-                                                'amount',
-                                                parseFloat(e.target.value) || 0,
-                                            )
-                                        }
-                                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 dark:border-gray-700 dark:bg-gray-700 dark:text-gray-300"
-                                        required
-                                        autoFocus
-                                    />
-                                    <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                                        This is your account balance at the
-                                        start of {selectedYear}. The balance
-                                        will be calculated automatically for
-                                        each month.
-                                    </p>
-                                </div>
-                            </div>
-                            <div className="mt-6 flex justify-end gap-3">
-                                <button
-                                    type="button"
-                                    onClick={() => setShowBalanceModal(false)}
-                                    className="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
-                                >
-                                    Cancel
-                                </button>
-                                <PrimaryButton
-                                    type="submit"
-                                    disabled={balanceForm.processing}
-                                >
-                                    Save
-                                </PrimaryButton>
-                            </div>
-                        </form>
-                    </div>
-                </div>
-            )}
         </AuthenticatedLayout>
     );
 }

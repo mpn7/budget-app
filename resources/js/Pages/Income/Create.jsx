@@ -1,4 +1,5 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
+import { formatCurrency } from '@/utils/currency';
 import { Head, router } from '@inertiajs/react';
 import { useEffect, useRef, useState } from 'react';
 
@@ -154,17 +155,6 @@ export default function Create({
         );
     };
 
-    const formatCurrency = (amount) => {
-        if (!amount || amount === '0' || amount === '0.00') return '';
-        const num = parseFloat(amount);
-        if (isNaN(num)) return '';
-        return new Intl.NumberFormat('en-US', {
-            style: 'currency',
-            currency: 'USD',
-            minimumFractionDigits: 2,
-            maximumFractionDigits: 2,
-        }).format(num);
-    };
 
     const calculateTotal = () => {
         return Object.values(cellData).reduce((sum, val) => {

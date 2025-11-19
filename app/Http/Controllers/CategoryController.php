@@ -76,6 +76,7 @@ class CategoryController extends Controller
             ],
             'color' => 'nullable|string|max:7',
             'order' => 'nullable|integer',
+            'is_investment' => 'nullable|boolean',
         ]);
 
         $validated['user_id'] = Auth::id();
@@ -110,6 +111,7 @@ class CategoryController extends Controller
             ],
             'color' => 'nullable|string|max:7',
             'order' => 'nullable|integer',
+            'is_investment' => 'nullable|boolean',
         ]);
 
         $category->update($validated);
