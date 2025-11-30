@@ -1,20 +1,27 @@
 import PrimaryButton from '@/Components/PrimaryButton';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, router, useForm } from '@inertiajs/react';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
 export default function Settings({ year, startingBalance, initialInvestment }) {
     const [selectedYear, setSelectedYear] = useState(year);
 
     const startingBalanceForm = useForm({
         amount: startingBalance || '',
-        year: selectedYear,
+        year: year,
     });
 
     const initialInvestmentForm = useForm({
         amount: initialInvestment || '',
-        year: selectedYear,
+        year: year,
     });
+
+    // Sync selectedYear state with year prop when it changes
+    useEffect(() => {
+        setSelectedYear(year);
+        startingBalanceForm.setData('year', year);
+        initialInvestmentForm.setData('year', year);
+    }, [year]);
 
     const handleYearChange = (newYear) => {
         setSelectedYear(newYear);

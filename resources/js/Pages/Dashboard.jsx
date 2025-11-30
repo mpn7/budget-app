@@ -195,15 +195,18 @@ export default function Dashboard({
                             </h3>
                             <div className="divide-y divide-gray-200 dark:divide-gray-700">
                                 {monthlyData.map((data) => {
+                                    const totalExpensesWithInvestments = data.expenses + data.investments;
                                     const maxValue = Math.max(
                                         ...monthlyData.map((d) =>
-                                            Math.max(d.income, d.expenses),
+                                            Math.max(d.income, d.expenses + d.investments),
                                         ),
                                     );
                                     const incomePercent =
                                         (data.income / maxValue) * 100;
                                     const expensePercent =
                                         (data.expenses / maxValue) * 100;
+                                    const investmentPercent =
+                                        (data.investments / maxValue) * 100;
 
                                     return (
                                         <div
@@ -223,11 +226,18 @@ export default function Dashboard({
                                                         title={`Income: ${formatCurrency(data.income)}`}
                                                     />
                                                     <div
-                                                        className="h-6 rounded-r bg-red-500"
+                                                        className="h-6 bg-red-500"
                                                         style={{
                                                             width: `${expensePercent}%`,
                                                         }}
                                                         title={`Expenses: ${formatCurrency(data.expenses)}`}
+                                                    />
+                                                    <div
+                                                        className="h-6 rounded-r bg-purple-500"
+                                                        style={{
+                                                            width: `${investmentPercent}%`,
+                                                        }}
+                                                        title={`Investments: ${formatCurrency(data.investments)}`}
                                                     />
                                                 </div>
                                                 <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400">
@@ -241,6 +251,12 @@ export default function Dashboard({
                                                         Expenses:{' '}
                                                         {formatCurrency(
                                                             data.expenses,
+                                                        )}
+                                                    </span>
+                                                    <span>
+                                                        Investments:{' '}
+                                                        {formatCurrency(
+                                                            data.investments,
                                                         )}
                                                     </span>
                                                 </div>

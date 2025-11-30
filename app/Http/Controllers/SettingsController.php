@@ -15,7 +15,12 @@ class SettingsController extends Controller
      */
     public function index(Request $request)
     {
-        $year = $request->get('year', date('Y'));
+        // Get year from request or session, defaulting to current year
+        $year = $request->get('year', $request->session()->get('budget_year', date('Y')));
+        
+        // Store in session for persistence
+        $request->session()->put('budget_year', $year);
+        
         $user = Auth::user();
 
         $startingBalance = StartingBalance::where('user_id', $user->id)

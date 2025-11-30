@@ -8,6 +8,7 @@ import { useEffect, useState } from 'react';
 export default function AuthenticatedLayout({ header, children }) {
     const user = usePage().props.auth.user;
     const flash = usePage().props.flash;
+    const budgetPeriod = usePage().props.budgetPeriod;
     const [showFlash, setShowFlash] = useState(false);
 
     useEffect(() => {
@@ -37,19 +38,28 @@ export default function AuthenticatedLayout({ header, children }) {
 
                             <div className="hidden space-x-8 sm:-my-px sm:ms-10 sm:flex">
                                 <NavLink
-                                    href={route('dashboard')}
+                                    href={route('dashboard', {
+                                        year: budgetPeriod.year,
+                                        month: budgetPeriod.month
+                                    })}
                                     active={route().current('dashboard')}
                                 >
                                     Dashboard
                                 </NavLink>
                                 <NavLink
-                                    href={route('transactions.index')}
+                                    href={route('transactions.index', {
+                                        year: budgetPeriod.year,
+                                        month: budgetPeriod.month
+                                    })}
                                     active={route().current('transactions.*')}
                                 >
                                     Expenses
                                 </NavLink>
                                 <NavLink
-                                    href={route('income-entries.index')}
+                                    href={route('income-entries.index', {
+                                        year: budgetPeriod.year,
+                                        month: budgetPeriod.month
+                                    })}
                                     active={route().current('income-entries.*')}
                                 >
                                     Income
@@ -170,19 +180,28 @@ export default function AuthenticatedLayout({ header, children }) {
                 >
                     <div className="space-y-1 pb-3 pt-2">
                         <ResponsiveNavLink
-                            href={route('dashboard')}
+                            href={route('dashboard', {
+                                year: budgetPeriod.year,
+                                month: budgetPeriod.month
+                            })}
                             active={route().current('dashboard')}
                         >
                             Dashboard
                         </ResponsiveNavLink>
                         <ResponsiveNavLink
-                            href={route('transactions.index')}
+                            href={route('transactions.index', {
+                                year: budgetPeriod.year,
+                                month: budgetPeriod.month
+                            })}
                             active={route().current('transactions.*')}
                         >
                             Expenses
                         </ResponsiveNavLink>
                         <ResponsiveNavLink
-                            href={route('income-entries.index')}
+                            href={route('income-entries.index', {
+                                year: budgetPeriod.year,
+                                month: budgetPeriod.month
+                            })}
                             active={route().current('income-entries.*')}
                         >
                             Income

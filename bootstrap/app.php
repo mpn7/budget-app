@@ -16,7 +16,9 @@ return Application::configure(basePath: dirname(__DIR__))
             \Illuminate\Http\Middleware\AddLinkHeadersForPreloadedAssets::class,
         ]);
 
-        //
+        $middleware->alias([
+            'persist.budget.period' => \App\Http\Middleware\PersistBudgetPeriod::class,
+        ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         //

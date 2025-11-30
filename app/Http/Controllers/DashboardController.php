@@ -16,8 +16,17 @@ class DashboardController extends Controller
 {
     public function index(Request $request)
     {
-        $year = $request->get('year', date('Y'));
-        $month = $request->get('month');
+        // Get year from request or session, defaulting to current year
+        $year = $request->get('year', $request->session()->get('budget_year', date('Y')));
+        $month = $request->get('month', $request->session()->get('budget_month'));
+
+        // Store in session for persistence
+        $request->session()->put('budget_year', $year);
+        if ($month) {
+            $request->session()->put('budget_month', $month);
+        } else {
+            $request->session()->forget('budget_month');
+        }
 
         $user = Auth::user();
 
@@ -133,17 +142,17 @@ class DashboardController extends Controller
                 ->where('month', $m)
                 ->get();
 
-            // Separate regular expenses from investment transactions for reporting
-            $monthRegularExpenseTransactions = $monthAllTransactions->filter(function ($transaction) use ($isInvestmentCategory) {
-                return !$isInvestmentCategory($transaction->category_id);
-            });
-            $monthExpenses = $monthRegularExpenseTransactions->sum('amount');
-
             // Investment transactions are tracked separately
             $monthInvestmentTransactions = $monthAllTransactions->filter(function ($transaction) use ($isInvestmentCategory) {
                 return $isInvestmentCategory($transaction->category_id);
             });
             $monthInvestments = $monthInvestmentTransactions->sum('amount');
+
+            // Regular expenses (excluding investments) - for display
+            $monthRegularExpenseTransactions = $monthAllTransactions->filter(function ($transaction) use ($isInvestmentCategory) {
+                return !$isInvestmentCategory($transaction->category_id);
+            });
+            $monthExpenses = $monthRegularExpenseTransactions->sum('amount');
 
             $monthIncome = IncomeEntry::where('user_id', $user->id)
                 ->where('year', $year)
@@ -171,7 +180,7 @@ class DashboardController extends Controller
                 'income' => (float) $monthIncome,
                 'investments' => (float) $monthInvestments,
                 'net' => $monthNet,
-                'netSavings' => $monthNet, // Net savings is the same as net
+                'netSavings' => (float) $monthIncome - (float) $monthExpenses - (float) $monthInvestments, // Net savings includes investments
                 'balance' => (float) $runningBalance,
                 'totalInvestments' => (float) $runningInvestments,
                 'netWorth' => (float) $runningBalance + (float) $runningInvestments,
@@ -293,6 +302,16 @@ class DashboardController extends Controller
 
                     $monthTotal += (float) $monthExpenses;
                 }
+
+                // Also check for transactions assigned directly to the parent category
+                // (in case some transactions are not assigned to subcategories)
+                $parentCategoryExpenses = Transaction::where('user_id', $user->id)
+                    ->where('year', $year)
+                    ->where('month', $m)
+                    ->where('category_id', $category->id)
+                    ->sum('amount');
+
+                $monthTotal += (float) $parentCategoryExpenses;
 
                 $categoryMonthlyData[] = $monthTotal;
                 $categoryTotal += $monthTotal;

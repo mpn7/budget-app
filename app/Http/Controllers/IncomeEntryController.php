@@ -16,9 +16,9 @@ class IncomeEntryController extends Controller
      */
     public function index(Request $request)
     {
-        // Redirect to bulk entry page
-        $year = $request->get('year', date('Y'));
-        $month = $request->get('month', date('n'));
+        // Redirect to bulk entry page using session values
+        $year = $request->session()->get('budget_year', date('Y'));
+        $month = $request->session()->get('budget_month', date('n'));
 
         return redirect()->route('income-entries.create', [
             'year' => $year,
@@ -31,8 +31,13 @@ class IncomeEntryController extends Controller
      */
     public function create(Request $request)
     {
-        $year = $request->get('year', date('Y'));
-        $month = $request->get('month', date('n'));
+        // Get year/month from request or session
+        $year = $request->get('year', $request->session()->get('budget_year', date('Y')));
+        $month = $request->get('month', $request->session()->get('budget_month', date('n')));
+        
+        // Store in session for persistence
+        $request->session()->put('budget_year', $year);
+        $request->session()->put('budget_month', $month);
 
         // Get all income sources
         $incomeSources = IncomeSource::where('user_id', Auth::id())

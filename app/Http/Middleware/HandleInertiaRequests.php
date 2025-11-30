@@ -37,6 +37,10 @@ class HandleInertiaRequests extends Middleware
             'flash' => [
                 'success' => $request->session()->get('success'),
             ],
+            'budgetPeriod' => [
+                'year' => $request->session()->get('budget_year', date('Y')),
+                'month' => $request->session()->get('budget_month'),
+            ],
         ];
     }
 }
