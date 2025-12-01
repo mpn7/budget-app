@@ -3,7 +3,7 @@ import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, router, useForm } from '@inertiajs/react';
 import { useState, useEffect } from 'react';
 
-export default function Settings({ year, startingBalance, initialInvestment }) {
+export default function Settings({ year, startingBalance }) {
     const [selectedYear, setSelectedYear] = useState(year);
 
     const startingBalanceForm = useForm({
@@ -11,16 +11,10 @@ export default function Settings({ year, startingBalance, initialInvestment }) {
         year: year,
     });
 
-    const initialInvestmentForm = useForm({
-        amount: initialInvestment || '',
-        year: year,
-    });
-
     // Sync selectedYear state with year prop when it changes
     useEffect(() => {
         setSelectedYear(year);
         startingBalanceForm.setData('year', year);
-        initialInvestmentForm.setData('year', year);
     }, [year]);
 
     const handleYearChange = (newYear) => {
@@ -32,14 +26,6 @@ export default function Settings({ year, startingBalance, initialInvestment }) {
         e.preventDefault();
         startingBalanceForm.setData('year', selectedYear);
         startingBalanceForm.post(route('settings.starting-balance'), {
-            preserveScroll: true,
-        });
-    };
-
-    const handleInitialInvestmentSubmit = (e) => {
-        e.preventDefault();
-        initialInvestmentForm.setData('year', selectedYear);
-        initialInvestmentForm.post(route('settings.initial-investment'), {
             preserveScroll: true,
         });
     };
@@ -113,51 +99,6 @@ export default function Settings({ year, startingBalance, initialInvestment }) {
                                             disabled={startingBalanceForm.processing}
                                         >
                                             Save Starting Balance
-                                        </PrimaryButton>
-                                    </div>
-                                </form>
-                            </div>
-                        </div>
-
-                        {/* Initial Investment Card */}
-                        <div className="overflow-hidden rounded-lg bg-white shadow dark:bg-gray-800">
-                            <div className="p-6">
-                                <h3 className="mb-4 text-lg font-semibold text-gray-900 dark:text-gray-100">
-                                    Initial Investment
-                                </h3>
-                                <p className="mb-4 text-sm text-gray-600 dark:text-gray-400">
-                                    Set your initial investment amount at the start
-                                    of {selectedYear}. Additional investments made
-                                    through investment categories will be added to
-                                    this.
-                                </p>
-                                <form onSubmit={handleInitialInvestmentSubmit}>
-                                    <div className="space-y-4">
-                                        <div>
-                                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                                                Initial Investment for {selectedYear}
-                                            </label>
-                                            <input
-                                                type="number"
-                                                step="0.01"
-                                                value={initialInvestmentForm.data.amount}
-                                                onChange={(e) =>
-                                                    initialInvestmentForm.setData(
-                                                        'amount',
-                                                        parseFloat(e.target.value) || 0,
-                                                    )
-                                                }
-                                                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 dark:border-gray-700 dark:bg-gray-700 dark:text-gray-300"
-                                                required
-                                            />
-                                        </div>
-                                    </div>
-                                    <div className="mt-6 flex justify-end">
-                                        <PrimaryButton
-                                            type="submit"
-                                            disabled={initialInvestmentForm.processing}
-                                        >
-                                            Save Initial Investment
                                         </PrimaryButton>
                                     </div>
                                 </form>

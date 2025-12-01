@@ -5,7 +5,6 @@ namespace App\Http\Controllers;
 use App\Models\Category;
 use App\Models\IncomeEntry;
 use App\Models\IncomeSource;
-use App\Models\Investment;
 use App\Models\StartingBalance;
 use App\Models\Transaction;
 use Illuminate\Http\Request;
@@ -71,13 +70,6 @@ class DashboardController extends Controller
 
         $startingBalanceAmount = $startingBalance ? (float) $startingBalance->amount : 0;
 
-        // Get initial investment for the year
-        $initialInvestment = Investment::where('user_id', $user->id)
-            ->where('year', $year)
-            ->first();
-
-        $initialInvestmentAmount = $initialInvestment ? (float) $initialInvestment->amount : 0;
-
         // Get investment category IDs (both parent and child categories marked as investment)
         $investmentCategoryIds = Category::where('user_id', $user->id)
             ->where('is_investment', true)
@@ -108,6 +100,21 @@ class DashboardController extends Controller
 
             return false;
         };
+
+        // Calculate initial investment amount from all previous years' investments
+        // This is the sum of all investment transactions from all years before the current year
+        // Get all investment transactions from all previous years
+        $allPreviousYearTransactions = Transaction::where('user_id', $user->id)
+            ->where('year', '<', $year)
+            ->with('category')
+            ->get();
+        
+        $allPreviousYearInvestmentTransactions = $allPreviousYearTransactions->filter(function ($transaction) use ($isInvestmentCategory) {
+            return $isInvestmentCategory($transaction->category_id);
+        });
+        
+        // Calculate total investments from all previous years (sum of all investment transactions)
+        $initialInvestmentAmount = $allPreviousYearInvestmentTransactions->sum('amount');
 
         // Get investment transactions (these will be counted as both expenses and investments)
         $investmentTransactions = $transactions->filter(function ($transaction) use ($isInvestmentCategory) {
@@ -425,7 +432,6 @@ class DashboardController extends Controller
             'categories' => $categories,
             'incomeSources' => $incomeSources,
             'startingBalance' => $startingBalanceAmount,
-            'initialInvestment' => $initialInvestmentAmount,
             'summary' => [
                 'totalIncome' => (float) $totalIncome,
                 'totalExpenses' => (float) $totalExpenses,

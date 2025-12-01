@@ -1,6 +1,6 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { formatCurrency } from '@/utils/currency';
-import { Head, router } from '@inertiajs/react';
+import { Head, Link, router } from '@inertiajs/react';
 import { useState } from 'react';
 
 export default function Dashboard({
@@ -11,7 +11,6 @@ export default function Dashboard({
     monthlyData,
     categoryBreakdown,
     startingBalance,
-    initialInvestment,
     expensesPerCategoryPerMonth,
 }) {
     const [selectedYear, setSelectedYear] = useState(year);
@@ -133,7 +132,10 @@ export default function Dashboard({
                                 </div>
                             </div>
                         </div>
-                        <div className="overflow-hidden rounded-lg bg-white shadow dark:bg-gray-800">
+                        <Link
+                            href={route('investments.index')}
+                            className="overflow-hidden rounded-lg bg-white shadow transition hover:shadow-lg dark:bg-gray-800"
+                        >
                             <div className="p-6">
                                 <div className="text-sm font-medium text-gray-500 dark:text-gray-400">
                                     Total Investments
@@ -145,7 +147,7 @@ export default function Dashboard({
                                 </div>
                                 {trends && <TrendIndicator value={trends.investmentsChange} label="investments" />}
                             </div>
-                        </div>
+                        </Link>
                         <div className="overflow-hidden rounded-lg bg-white shadow dark:bg-gray-800">
                             <div className="p-6">
                                 <div className="text-sm font-medium text-gray-500 dark:text-gray-400">
