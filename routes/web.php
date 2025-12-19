@@ -9,6 +9,7 @@ use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\SettingsController;
 use App\Http\Controllers\StartingBalanceController;
 use App\Http\Controllers\TransactionController;
+use App\Http\Controllers\YearComparisonController;
 use Illuminate\Foundation\Application;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
@@ -24,6 +25,9 @@ Route::get('/', function () {
 
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
+    
+    // Year Comparison
+    Route::get('/year-comparison', [YearComparisonController::class, 'index'])->name('year-comparison');
     
     // Investments
     Route::get('/investments', [InvestmentsController::class, 'index'])->name('investments.index');

@@ -65,6 +65,12 @@ export default function AuthenticatedLayout({ header, children }) {
                                     Income
                                 </NavLink>
                                 <NavLink
+                                    href={route('year-comparison')}
+                                    active={route().current('year-comparison')}
+                                >
+                                    Compare Years
+                                </NavLink>
+                                <NavLink
                                     href={route('categories.index')}
                                     active={route().current('categories.*')}
                                 >
@@ -205,6 +211,12 @@ export default function AuthenticatedLayout({ header, children }) {
                             active={route().current('income-entries.*')}
                         >
                             Income
+                        </ResponsiveNavLink>
+                        <ResponsiveNavLink
+                            href={route('year-comparison')}
+                            active={route().current('year-comparison')}
+                        >
+                            Compare Years
                         </ResponsiveNavLink>
                         <ResponsiveNavLink
                             href={route('categories.index')}
