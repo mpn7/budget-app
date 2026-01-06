@@ -34,7 +34,7 @@ class TransactionController extends Controller
         // Get year/month from request or session
         $year = $request->get('year', $request->session()->get('budget_year', date('Y')));
         $month = $request->get('month', $request->session()->get('budget_month', date('n')));
-        
+
         // Store in session for persistence
         $request->session()->put('budget_year', $year);
         $request->session()->put('budget_month', $month);
@@ -46,27 +46,39 @@ class TransactionController extends Controller
             ->orderBy('order')
             ->get();
 
-        // Get existing transactions for this month/year
-        $existingTransactions = Transaction::where('user_id', Auth::id())
-            ->where('year', $year)
-            ->where('month', $month)
-            ->with('category')
-            ->get()
-            ->groupBy('category_id')
-            ->toArray();
+        // Calculate the months to display: previous 2, current, and next 1
+        $months = [];
+        for ($i = -2; $i <= 1; $i++) {
+            $date = new \DateTime("{$year}-{$month}-01");
+            $date->modify("{$i} months");
+            $months[] = [
+                'year' => (int) $date->format('Y'),
+                'month' => (int) $date->format('n'),
+                'monthName' => $date->format('F'),
+                'yearName' => $date->format('Y'),
+            ];
+        }
 
-        // Calculate total expenses for this month/year
-        $totalExpenses = Transaction::where('user_id', Auth::id())
-            ->where('year', $year)
-            ->where('month', $month)
-            ->sum('amount');
+        // Get existing transactions for all 4 months
+        $transactionsByMonth = [];
+        foreach ($months as $monthData) {
+            $monthTransactions = Transaction::where('user_id', Auth::id())
+                ->where('year', $monthData['year'])
+                ->where('month', $monthData['month'])
+                ->with('category')
+                ->get()
+                ->groupBy('category_id')
+                ->toArray();
+
+            $transactionsByMonth["{$monthData['year']}-{$monthData['month']}"] = $monthTransactions;
+        }
 
         return Inertia::render('Transactions/Create', [
             'categories' => $categories,
             'year' => (int) $year,
             'month' => (int) $month,
-            'existingTransactions' => $existingTransactions,
-            'totalExpenses' => (float) $totalExpenses,
+            'months' => $months,
+            'transactionsByMonth' => $transactionsByMonth,
         ]);
     }
 
@@ -104,10 +116,22 @@ class TransactionController extends Controller
             ]);
         }
 
+        // If this is an AJAX request (from fetch), return JSON
+        if ($request->wantsJson()) {
+            return response()->json([
+                'success' => true,
+                'message' => 'Transaction saved successfully',
+            ]);
+        }
+
+        // Otherwise redirect back (for backwards compatibility)
+        $sessionYear = $request->session()->get('budget_year', date('Y'));
+        $sessionMonth = $request->session()->get('budget_month', date('n'));
+
         return redirect()
             ->route('transactions.create', [
-                'year' => $validated['year'],
-                'month' => $validated['month'],
+                'year' => $sessionYear,
+                'month' => $sessionMonth,
             ]);
     }
 }

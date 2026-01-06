@@ -7,8 +7,8 @@ export default function Create({
     categories,
     year,
     month,
-    existingTransactions,
-    totalExpenses,
+    months,
+    transactionsByMonth,
 }) {
     const [selectedYear, setSelectedYear] = useState(year);
     const [selectedMonth, setSelectedMonth] = useState(month);
@@ -17,38 +17,44 @@ export default function Create({
     const [isProcessing, setIsProcessing] = useState(false);
     const [lastSaved, setLastSaved] = useState(null);
     const inputRefs = useRef({});
+    const saveTimeoutRef = useRef(null);
 
-    // Initialize cell data from existing transactions
+    // Initialize cell data from existing transactions for all months
     useEffect(() => {
         const initialData = {};
-        if (categories && existingTransactions) {
-            // Convert existingTransactions to a Map-like object if it's not already
-            const transactionsMap =
-                existingTransactions instanceof Map
-                    ? existingTransactions
-                    : new Map(Object.entries(existingTransactions || {}));
+        if (categories && transactionsByMonth && months) {
+            months.forEach((monthData) => {
+                const monthKey = `${monthData.year}-${monthData.month}`;
+                const monthTransactions = transactionsByMonth[monthKey] || {};
 
-            categories.forEach((category) => {
-                if (category.children && category.children.length > 0) {
-                    category.children.forEach((subcategory) => {
-                        const key = `${subcategory.id}`;
-                        const existing = transactionsMap.get(
-                            subcategory.id.toString(),
-                        );
-                        if (existing && existing.length > 0) {
-                            // Sum up existing transactions for this category
-                            const total = existing.reduce(
-                                (sum, t) => sum + parseFloat(t.amount),
-                                0,
+                // Convert to Map if needed
+                const transactionsMap =
+                    monthTransactions instanceof Map
+                        ? monthTransactions
+                        : new Map(Object.entries(monthTransactions || {}));
+
+                categories.forEach((category) => {
+                    if (category.children && category.children.length > 0) {
+                        category.children.forEach((subcategory) => {
+                            const key = `${subcategory.id}-${monthKey}`;
+                            const existing = transactionsMap.get(
+                                subcategory.id.toString(),
                             );
-                            initialData[key] = total.toFixed(2);
-                        }
-                    });
-                }
+                            if (existing && existing.length > 0) {
+                                // Sum up existing transactions for this category
+                                const total = existing.reduce(
+                                    (sum, t) => sum + parseFloat(t.amount),
+                                    0,
+                                );
+                                initialData[key] = total.toFixed(2);
+                            }
+                        });
+                    }
+                });
             });
         }
         setCellData(initialData);
-    }, [categories, existingTransactions]);
+    }, [categories, transactionsByMonth, months]);
 
     // Automatically load data when month/year changes
     useEffect(() => {
@@ -63,8 +69,17 @@ export default function Create({
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [selectedYear, selectedMonth]);
 
-    const handleCellChange = (categoryId, value) => {
-        const key = `${categoryId}`;
+    // Cleanup timeout on unmount
+    useEffect(() => {
+        return () => {
+            if (saveTimeoutRef.current) {
+                clearTimeout(saveTimeoutRef.current);
+            }
+        };
+    }, []);
+
+    const handleCellChange = (categoryId, monthKey, value) => {
+        const key = `${categoryId}-${monthKey}`;
         // Allow numbers, decimal points, and math operators (+, -, *, /)
         const cleaned = value.replace(/[^0-9.+\-*/]/g, '');
         setCellData((prev) => ({
@@ -73,8 +88,8 @@ export default function Create({
         }));
     };
 
-    const handleCellBlur = (categoryId) => {
-        const key = `${categoryId}`;
+    const handleCellBlur = (categoryId, monthKey) => {
+        const key = `${categoryId}-${monthKey}`;
         const value = cellData[key];
         let updatedData = { ...cellData };
 
@@ -127,15 +142,25 @@ export default function Create({
         // Update state
         setCellData(updatedData);
 
-        // Save only this category immediately
-        saveExpense(categoryId, updatedData[key] || '');
+        // Parse month/year from monthKey
+        const [monthYear, monthMonth] = monthKey.split('-');
+
+        // Clear any pending save timeout
+        if (saveTimeoutRef.current) {
+            clearTimeout(saveTimeoutRef.current);
+        }
+
+        // Debounce the save slightly to prevent rapid-fire saves
+        saveTimeoutRef.current = setTimeout(() => {
+            saveExpense(categoryId, updatedData[key] || '', parseInt(monthYear), parseInt(monthMonth));
+        }, 100);
     };
 
-    const handleKeyDown = (e, categoryId, nextCategoryId) => {
+    const handleKeyDown = (e, categoryId, monthKey, nextCategoryId) => {
         if (e.key === 'Enter' || e.key === 'Tab') {
             e.preventDefault();
             if (nextCategoryId) {
-                const nextKey = `${nextCategoryId}`;
+                const nextKey = `${nextCategoryId}-${monthKey}`;
                 const nextInput = inputRefs.current[nextKey];
                 if (nextInput) {
                     nextInput.focus();
@@ -177,44 +202,48 @@ export default function Create({
     const groupedCategories = getGroupedCategories();
     const flatCategories = getFlatCategories();
 
-    const saveExpense = (categoryId, amount) => {
+    const saveExpense = (categoryId, amount, saveYear, saveMonth) => {
         const numAmount = parseFloat(amount);
         const amountToSave = !isNaN(numAmount) && numAmount > 0 ? numAmount : null;
 
         setIsProcessing(true);
 
-        router.post(
-            route('transactions.single'),
-            {
+        // Use fetch instead of router.post to avoid any page refresh/state updates
+        fetch(route('transactions.single'), {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
+                'Accept': 'application/json',
+            },
+            body: JSON.stringify({
                 category_id: parseInt(categoryId),
                 amount: amountToSave,
-                month: selectedMonth,
-                year: selectedYear,
-            },
-            {
-                preserveScroll: true,
-                preserveState: true,
-                onError: (errors) => {
-                    console.error('Save errors:', errors);
-                    setIsProcessing(false);
-                },
-                onSuccess: () => {
-                    setLastSaved(new Date());
-                    setIsProcessing(false);
-                },
-                onFinish: () => {
-                    setIsProcessing(false);
-                },
-            },
-        );
+                month: saveMonth,
+                year: saveYear,
+            }),
+        })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Save failed');
+                }
+                setLastSaved(new Date());
+                setIsProcessing(false);
+            })
+            .catch((error) => {
+                console.error('Save error:', error);
+                setIsProcessing(false);
+            });
     };
 
 
-    const calculateTotal = () => {
-        return Object.values(cellData).reduce((sum, val) => {
-            const num = parseFloat(val);
-            return sum + (isNaN(num) ? 0 : num);
-        }, 0);
+    const calculateTotal = (monthKey) => {
+        return Object.entries(cellData)
+            .filter(([key]) => key.endsWith(`-${monthKey}`))
+            .reduce((sum, [, val]) => {
+                const num = parseFloat(val);
+                return sum + (isNaN(num) ? 0 : num);
+            }, 0);
     };
 
     const getMonthName = (monthNum) => {
@@ -272,24 +301,31 @@ export default function Create({
 
             <div className="py-6">
                 <div className="mx-auto max-w-7xl sm:px-6 lg:px-8">
-                    {/* Total Expenses Display */}
+                    {/* Total Expenses Display for All Months */}
                     <div className="mb-6 overflow-hidden rounded-lg bg-white shadow dark:bg-gray-800">
                         <div className="p-6">
-                            <div className="flex items-center justify-between">
-                                <div>
-                                    <div className="text-sm font-medium text-gray-500 dark:text-gray-400">
-                                        Total Expenses for{' '}
-                                        {getMonthName(selectedMonth)}{' '}
-                                        {selectedYear}
-                                    </div>
-                                    <div className="mt-2 text-3xl font-bold text-red-600 dark:text-red-400">
-                                        {formatCurrency(
-                                            calculateTotal() ||
-                                            totalExpenses ||
-                                            0,
-                                        )}
-                                    </div>
-                                </div>
+                            <div className="grid grid-cols-1 gap-6 md:grid-cols-4">
+                                {months && months.map((monthData) => {
+                                    const monthKey = `${monthData.year}-${monthData.month}`;
+                                    const total = calculateTotal(monthKey);
+                                    const isCurrent = monthData.year === year && monthData.month === month;
+                                    return (
+                                        <div onClick={() => {
+                                            if (!isCurrent) {
+                                                setSelectedYear(monthData.year);
+                                                setSelectedMonth(monthData.month);
+                                            }
+                                        }} key={monthKey} className={isCurrent ? 'rounded-lg border-2 border-primary-500 p-2' : ''}>
+                                            <div className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                                                {monthData.monthName} {monthData.yearName}
+                                                {isCurrent && <span className="ml-2 text-xs text-primary-600 dark:text-primary-400">(Current)</span>}
+                                            </div>
+                                            <div className="mt-2 text-2xl font-bold text-red-600 dark:text-red-400">
+                                                {formatCurrency(total)}
+                                            </div>
+                                        </div>
+                                    );
+                                })}
                             </div>
                         </div>
                     </div>
@@ -302,16 +338,23 @@ export default function Create({
                                         <th className="sticky left-0 z-10 bg-gray-50 px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:bg-gray-700 dark:text-gray-300">
                                             Category
                                         </th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-300">
-                                            Amount
-                                        </th>
+                                        {months && months.map((monthData) => {
+                                            const monthKey = `${monthData.year}-${monthData.month}`;
+                                            const isCurrent = monthData.year === year && monthData.month === month;
+                                            return (
+                                                <th key={monthKey} className={`px-4 py-3 text-center text-xs font-medium uppercase tracking-wider ${isCurrent ? 'bg-primary-100 text-primary-800 dark:bg-primary-900 dark:text-primary-200' : 'text-gray-500 dark:text-gray-300'}`}>
+                                                    {monthData.monthName.substring(0, 3)} {monthData.yearName}
+                                                    {isCurrent && <div className="text-[10px] font-normal normal-case">Current</div>}
+                                                </th>
+                                            );
+                                        })}
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-200 bg-white dark:divide-gray-700 dark:bg-gray-800">
                                     {groupedCategories.length === 0 ? (
                                         <tr>
                                             <td
-                                                colSpan="2"
+                                                colSpan={months ? months.length + 1 : 2}
                                                 className="px-6 py-8 text-center text-sm text-gray-500 dark:text-gray-400"
                                             >
                                                 No categories found. Please
@@ -327,7 +370,7 @@ export default function Create({
                                                     {/* Parent Category Header */}
                                                     <tr className="bg-primary-50 dark:bg-primary-900/20">
                                                         <td
-                                                            className="sticky left-0 z-10 px-6 py-3 text-sm font-bold text-gray-900 dark:text-gray-100"
+                                                            className="sticky left-0 z-10 bg-primary-50 px-6 py-3 text-sm font-bold text-gray-900 dark:bg-primary-900/20 dark:text-gray-100"
                                                         >
                                                             <div className="flex items-center gap-2">
                                                                 <div
@@ -346,28 +389,27 @@ export default function Create({
                                                                 }
                                                             </div>
                                                         </td>
-                                                        <td className="px-6 py-3 text-right text-sm font-semibold text-gray-500 dark:text-gray-400">
-                                                            {(() => {
-                                                                const subtotal = group.children.reduce(
-                                                                    (sum, child) => {
-                                                                        const val = cellData[`${child.id}`];
-                                                                        const num = parseFloat(val);
-                                                                        return sum + (isNaN(num) ? 0 : num);
-                                                                    },
-                                                                    0
-                                                                );
-                                                                return subtotal > 0 ? formatCurrency(subtotal) : '—';
-                                                            })()}
-                                                        </td>
+                                                        {months && months.map((monthData) => {
+                                                            const monthKey = `${monthData.year}-${monthData.month}`;
+                                                            const subtotal = group.children.reduce(
+                                                                (sum, child) => {
+                                                                    const val = cellData[`${child.id}-${monthKey}`];
+                                                                    const num = parseFloat(val);
+                                                                    return sum + (isNaN(num) ? 0 : num);
+                                                                },
+                                                                0
+                                                            );
+                                                            const isCurrent = monthData.year === year && monthData.month === month;
+                                                            return (
+                                                                <td key={monthKey} className={`px-4 py-3 text-right text-sm font-semibold ${isCurrent ? 'bg-primary-100 dark:bg-primary-900/40' : ''} text-gray-500 dark:text-gray-400`}>
+                                                                    {subtotal > 0 ? formatCurrency(subtotal) : '—'}
+                                                                </td>
+                                                            );
+                                                        })}
                                                     </tr>
                                                     {/* Subcategories */}
                                                     {group.children.map(
                                                         (category) => {
-                                                            const cellKey = `${category.id}`;
-                                                            const value =
-                                                                cellData[
-                                                                cellKey
-                                                                ] || '';
                                                             // Find next category in flat list
                                                             const currentIndex =
                                                                 flatCategories.findIndex(
@@ -380,19 +422,13 @@ export default function Create({
                                                                 currentIndex +
                                                                 1
                                                                 ];
-                                                            const isFocused =
-                                                                focusedCell ===
-                                                                cellKey;
 
                                                             return (
                                                                 <tr
                                                                     key={
                                                                         category.id
                                                                     }
-                                                                    className={`hover:bg-gray-50 dark:hover:bg-gray-700 ${isFocused
-                                                                        ? 'bg-primary-50 dark:bg-primary-900/20'
-                                                                        : ''
-                                                                        }`}
+                                                                    className="hover:bg-gray-50 dark:hover:bg-gray-700"
                                                                 >
                                                                     <td className="sticky left-0 z-10 whitespace-nowrap bg-white px-6 py-4 pl-12 text-sm font-medium text-gray-900 dark:bg-gray-800 dark:text-gray-100">
                                                                         <div className="flex items-center gap-2">
@@ -411,73 +447,56 @@ export default function Create({
                                                                             </span>
                                                                         </div>
                                                                     </td>
-                                                                    <td className="px-6 py-2">
-                                                                        <div className="relative">
-                                                                            <input
-                                                                                ref={(
-                                                                                    el,
-                                                                                ) => {
-                                                                                    if (
-                                                                                        el
-                                                                                    ) {
-                                                                                        inputRefs.current[
-                                                                                            cellKey
-                                                                                        ] =
-                                                                                            el;
-                                                                                    }
-                                                                                }}
-                                                                                type="text"
-                                                                                value={
-                                                                                    value
-                                                                                }
-                                                                                onChange={(
-                                                                                    e,
-                                                                                ) =>
-                                                                                    handleCellChange(
-                                                                                        category.id,
-                                                                                        e
-                                                                                            .target
-                                                                                            .value,
-                                                                                    )
-                                                                                }
-                                                                                onBlur={() => {
-                                                                                    handleCellBlur(
-                                                                                        category.id,
-                                                                                    );
-                                                                                    setFocusedCell(
-                                                                                        null,
-                                                                                    );
-                                                                                }}
-                                                                                onFocus={() =>
-                                                                                    setFocusedCell(
-                                                                                        cellKey,
-                                                                                    )
-                                                                                }
-                                                                                onKeyDown={(
-                                                                                    e,
-                                                                                ) =>
-                                                                                    handleKeyDown(
-                                                                                        e,
-                                                                                        category.id,
-                                                                                        nextCategory?.id,
-                                                                                    )
-                                                                                }
-                                                                                placeholder="e.g. 100 or 10+10 or 500-50 or 4*250"
-                                                                                className="w-full rounded-md border-gray-300 bg-white px-3 py-2 pr-16 text-right text-sm font-medium text-gray-900 shadow-sm focus:border-primary-500 focus:ring-primary-500 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100"
-                                                                            />
-                                                                            {value &&
-                                                                                parseFloat(
-                                                                                    value,
-                                                                                ) >
-                                                                                0 && (
-                                                                                    <div className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400">
-                                                                                        {formatCurrency(
-                                                                                            value,
-                                                                                        )}
-                                                                                    </div>
-                                                                                )}
-                                                                        </div>
-                                                                    </td>
+                                                                    {months && months.map((monthData) => {
+                                                                        const monthKey = `${monthData.year}-${monthData.month}`;
+                                                                        const cellKey = `${category.id}-${monthKey}`;
+                                                                        const value = cellData[cellKey] || '';
+                                                                        const isFocused = focusedCell === cellKey;
+                                                                        const isCurrent = monthData.year === year && monthData.month === month;
+
+                                                                        return (
+                                                                            <td key={monthKey} className={`px-2 py-2 ${isCurrent ? 'bg-primary-50 dark:bg-primary-900/20' : ''}`}>
+                                                                                <div className="relative">
+                                                                                    <input
+                                                                                        ref={(el) => {
+                                                                                            if (el) {
+                                                                                                inputRefs.current[cellKey] = el;
+                                                                                            }
+                                                                                        }}
+                                                                                        type="text"
+                                                                                        value={value}
+                                                                                        onChange={(e) =>
+                                                                                            handleCellChange(
+                                                                                                category.id,
+                                                                                                monthKey,
+                                                                                                e.target.value,
+                                                                                            )
+                                                                                        }
+                                                                                        onBlur={() => {
+                                                                                            handleCellBlur(
+                                                                                                category.id,
+                                                                                                monthKey,
+                                                                                            );
+                                                                                            setFocusedCell(null);
+                                                                                        }}
+                                                                                        onFocus={() =>
+                                                                                            setFocusedCell(cellKey)
+                                                                                        }
+                                                                                        onKeyDown={(e) =>
+                                                                                            handleKeyDown(
+                                                                                                e,
+                                                                                                category.id,
+                                                                                                monthKey,
+                                                                                                nextCategory?.id,
+                                                                                            )
+                                                                                        }
+                                                                                        placeholder="-"
+                                                                                        className={`w-full rounded-md border-gray-300 bg-white px-2 py-1.5 text-right text-sm font-medium text-gray-900 shadow-sm focus:border-primary-500 focus:ring-primary-500 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 ${isFocused ? 'ring-2 ring-primary-500' : ''}`}
+                                                                                    />
+                                                                                </div>
+                                                                            </td>
+                                                                        );
+                                                                    })}
                                                                 </tr>
                                                             );
                                                         },
@@ -491,11 +510,16 @@ export default function Create({
                                             <td className="sticky left-0 z-10 whitespace-nowrap bg-gray-50 px-6 py-4 text-sm font-bold text-gray-900 dark:bg-gray-700 dark:text-gray-100">
                                                 Total
                                             </td>
-                                            <td className="px-6 py-4 text-right text-sm font-bold text-gray-900 dark:text-gray-100">
-                                                {formatCurrency(
-                                                    calculateTotal().toFixed(2),
-                                                )}
-                                            </td>
+                                            {months && months.map((monthData) => {
+                                                const monthKey = `${monthData.year}-${monthData.month}`;
+                                                const total = calculateTotal(monthKey);
+                                                const isCurrent = monthData.year === year && monthData.month === month;
+                                                return (
+                                                    <td key={monthKey} className={`px-4 py-4 text-right text-sm font-bold ${isCurrent ? 'bg-primary-100 dark:bg-primary-900/40' : ''} text-gray-900 dark:text-gray-100`}>
+                                                        {formatCurrency(total)}
+                                                    </td>
+                                                );
+                                            })}
                                         </tr>
                                     )}
                                 </tbody>
@@ -505,8 +529,8 @@ export default function Create({
                         <div className="border-t border-gray-200 bg-gray-50 px-6 py-4 dark:border-gray-700 dark:bg-gray-700">
                             <div className="flex items-center justify-between">
                                 <p className="text-sm text-gray-600 dark:text-gray-400">
-                                    Enter amounts or use math: <span className="font-mono text-xs">100+50</span>, <span className="font-mono text-xs">500-50</span>, <span className="font-mono text-xs">4*250</span>, <span className="font-mono text-xs">1000/2</span>. 
-                                    Press Tab/Enter to save and move to next row.
+                                    Enter amounts or use math: <span className="font-mono text-xs">100+50</span>, <span className="font-mono text-xs">500-50</span>, <span className="font-mono text-xs">4*250</span>.
+                                    Press Tab/Enter to move to next row. Edit any of the 4 months shown.
                                 </p>
                                 <div className="flex items-center gap-2 text-sm">
                                     {isProcessing ? (
