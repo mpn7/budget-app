@@ -13,6 +13,7 @@ export default function Create({
     const [selectedYear, setSelectedYear] = useState(year);
     const [selectedMonth, setSelectedMonth] = useState(month);
     const [cellData, setCellData] = useState({});
+    const [rawValues, setRawValues] = useState({});
     const [focusedCell, setFocusedCell] = useState(null);
     const [isProcessing, setIsProcessing] = useState(false);
     const [lastSaved, setLastSaved] = useState(null);
@@ -22,6 +23,7 @@ export default function Create({
     // Initialize cell data from existing transactions for all months
     useEffect(() => {
         const initialData = {};
+        const initialRawValues = {};
         if (categories && transactionsByMonth && months) {
             months.forEach((monthData) => {
                 const monthKey = `${monthData.year}-${monthData.month}`;
@@ -47,6 +49,11 @@ export default function Create({
                                     0,
                                 );
                                 initialData[key] = total.toFixed(2);
+
+                                // Load raw_value if it exists (only from first transaction since we only store one per category/month)
+                                if (existing[0].raw_value) {
+                                    initialRawValues[key] = existing[0].raw_value;
+                                }
                             }
                         });
                     }
@@ -54,6 +61,7 @@ export default function Create({
             });
         }
         setCellData(initialData);
+        setRawValues(initialRawValues);
     }, [categories, transactionsByMonth, months]);
 
     // Automatically load data when month/year changes
@@ -78,6 +86,20 @@ export default function Create({
         };
     }, []);
 
+    const handleCellFocus = (categoryId, monthKey) => {
+        const key = `${categoryId}-${monthKey}`;
+        setFocusedCell(key);
+
+        // If there's a raw value stored, show it in the input
+        const rawValue = rawValues[key];
+        if (rawValue) {
+            setCellData((prev) => ({
+                ...prev,
+                [key]: rawValue,
+            }));
+        }
+    };
+
     const handleCellChange = (categoryId, monthKey, value) => {
         const key = `${categoryId}-${monthKey}`;
         // Allow numbers, decimal points, and math operators (+, -, *, /)
@@ -92,8 +114,13 @@ export default function Create({
         const key = `${categoryId}-${monthKey}`;
         const value = cellData[key];
         let updatedData = { ...cellData };
+        let updatedRawValues = { ...rawValues };
+        let rawValue = null;
 
         if (value) {
+            // Store the original value before evaluation
+            rawValue = value;
+
             // Check if the value contains any math operators
             if (value.match(/[+\-*/]/)) {
                 try {
@@ -102,9 +129,11 @@ export default function Create({
                     const result = Function('"use strict"; return (' + value + ')')();
                     if (!isNaN(result) && result > 0) {
                         updatedData[key] = result.toFixed(2);
+                        updatedRawValues[key] = rawValue; // Store the original expression
                     } else {
                         // If calculation resulted in 0 or negative, clear the field
                         updatedData[key] = '';
+                        delete updatedRawValues[key];
                     }
                 } catch (e) {
                     // If evaluation failed, try legacy + operator approach
@@ -116,12 +145,15 @@ export default function Create({
                         const sum = parts.reduce((total, num) => total + num, 0);
                         if (!isNaN(sum) && sum > 0) {
                             updatedData[key] = sum.toFixed(2);
+                            updatedRawValues[key] = rawValue; // Store the original expression
                         } else {
                             updatedData[key] = '';
+                            delete updatedRawValues[key];
                         }
                     } else {
                         // Clear invalid expressions
                         updatedData[key] = '';
+                        delete updatedRawValues[key];
                     }
                 }
             } else {
@@ -129,18 +161,23 @@ export default function Create({
                 const numValue = parseFloat(value);
                 if (!isNaN(numValue) && numValue > 0) {
                     updatedData[key] = numValue.toFixed(2);
+                    // For single values, don't store raw_value (only for expressions)
+                    delete updatedRawValues[key];
                 } else {
                     // Clear invalid values
                     updatedData[key] = '';
+                    delete updatedRawValues[key];
                 }
             }
         } else {
             // Field is empty, remove it from data
             delete updatedData[key];
+            delete updatedRawValues[key];
         }
 
         // Update state
         setCellData(updatedData);
+        setRawValues(updatedRawValues);
 
         // Parse month/year from monthKey
         const [monthYear, monthMonth] = monthKey.split('-');
@@ -152,7 +189,7 @@ export default function Create({
 
         // Debounce the save slightly to prevent rapid-fire saves
         saveTimeoutRef.current = setTimeout(() => {
-            saveExpense(categoryId, updatedData[key] || '', parseInt(monthYear), parseInt(monthMonth));
+            saveExpense(categoryId, updatedData[key] || '', updatedRawValues[key] || null, parseInt(monthYear), parseInt(monthMonth));
         }, 100);
     };
 
@@ -202,7 +239,7 @@ export default function Create({
     const groupedCategories = getGroupedCategories();
     const flatCategories = getFlatCategories();
 
-    const saveExpense = (categoryId, amount, saveYear, saveMonth) => {
+    const saveExpense = (categoryId, amount, rawValue, saveYear, saveMonth) => {
         const numAmount = parseFloat(amount);
         const amountToSave = !isNaN(numAmount) && numAmount > 0 ? numAmount : null;
 
@@ -219,6 +256,7 @@ export default function Create({
             body: JSON.stringify({
                 category_id: parseInt(categoryId),
                 amount: amountToSave,
+                raw_value: rawValue,
                 month: saveMonth,
                 year: saveYear,
             }),
@@ -454,6 +492,9 @@ export default function Create({
                                                                         const isFocused = focusedCell === cellKey;
                                                                         const isCurrent = monthData.year === year && monthData.month === month;
 
+                                                                        const rawValue = rawValues[cellKey];
+                                                                        const hasExpression = rawValue && rawValue !== value;
+
                                                                         return (
                                                                             <td key={monthKey} className={`px-2 py-2 ${isCurrent ? 'bg-primary-50 dark:bg-primary-900/20' : ''}`}>
                                                                                 <div className="relative">
@@ -480,7 +521,10 @@ export default function Create({
                                                                                             setFocusedCell(null);
                                                                                         }}
                                                                                         onFocus={() =>
-                                                                                            setFocusedCell(cellKey)
+                                                                                            handleCellFocus(
+                                                                                                category.id,
+                                                                                                monthKey,
+                                                                                            )
                                                                                         }
                                                                                         onKeyDown={(e) =>
                                                                                             handleKeyDown(
@@ -492,7 +536,13 @@ export default function Create({
                                                                                         }
                                                                                         placeholder="-"
                                                                                         className={`w-full rounded-md border-gray-300 bg-white px-2 py-1.5 text-right text-sm font-medium text-gray-900 shadow-sm focus:border-primary-500 focus:ring-primary-500 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 ${isFocused ? 'ring-2 ring-primary-500' : ''}`}
+                                                                                        title={hasExpression ? `Original: ${rawValue}` : ''}
                                                                                     />
+                                                                                    {hasExpression && !isFocused && (
+                                                                                        <div className="mt-0.5 text-right text-[10px] text-gray-500 dark:text-gray-400">
+                                                                                            ({rawValue})
+                                                                                        </div>
+                                                                                    )}
                                                                                 </div>
                                                                             </td>
                                                                         );

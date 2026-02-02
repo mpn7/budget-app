@@ -25,10 +25,10 @@ Route::get('/', function () {
 
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
-    
+
     // Year Comparison
     Route::get('/year-comparison', [YearComparisonController::class, 'index'])->name('year-comparison');
-    
+
     // Investments
     Route::get('/investments', [InvestmentsController::class, 'index'])->name('investments.index');
 
@@ -37,7 +37,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         '/categories/create',
         [CategoryController::class, 'create']
     )->name('categories.create');
-    Route::apiResource('categories', CategoryController::class);
+    Route::resource('categories', CategoryController::class);
 
     // Income Sources
     Route::get(

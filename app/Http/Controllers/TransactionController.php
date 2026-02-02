@@ -93,6 +93,7 @@ class TransactionController extends Controller
                 Rule::exists('categories', 'id')->where('user_id', Auth::id()),
             ],
             'amount' => 'nullable|numeric|min:0',
+            'raw_value' => 'nullable|string|max:255',
             'month' => 'required|integer|min:1|max:12',
             'year' => 'required|integer|min:2000|max:2100',
         ]);
@@ -110,6 +111,7 @@ class TransactionController extends Controller
                 'user_id' => Auth::id(),
                 'category_id' => $validated['category_id'],
                 'amount' => $validated['amount'],
+                'raw_value' => $validated['raw_value'] ?? null,
                 'description' => null,
                 'month' => $validated['month'],
                 'year' => $validated['year'],
