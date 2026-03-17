@@ -17,6 +17,7 @@ export default function Create({
     const [focusedCell, setFocusedCell] = useState(null);
     const [isProcessing, setIsProcessing] = useState(false);
     const [lastSaved, setLastSaved] = useState(null);
+    const [saveError, setSaveError] = useState(null);
     const inputRefs = useRef({});
     const saveTimeoutRef = useRef(null);
 
@@ -244,33 +245,23 @@ export default function Create({
         const amountToSave = !isNaN(numAmount) && numAmount > 0 ? numAmount : null;
 
         setIsProcessing(true);
+        setSaveError(null);
 
-        // Use fetch instead of router.post to avoid any page refresh/state updates
-        fetch(route('transactions.single'), {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
-                'Accept': 'application/json',
-            },
-            body: JSON.stringify({
-                category_id: parseInt(categoryId),
-                amount: amountToSave,
-                raw_value: rawValue,
-                month: saveMonth,
-                year: saveYear,
-            }),
+        window.axios.post(route('transactions.single'), {
+            category_id: parseInt(categoryId),
+            amount: amountToSave,
+            raw_value: rawValue,
+            month: saveMonth,
+            year: saveYear,
         })
-            .then(response => {
-                if (!response.ok) {
-                    throw new Error('Save failed');
-                }
+            .then(() => {
                 setLastSaved(new Date());
                 setIsProcessing(false);
             })
             .catch((error) => {
                 console.error('Save error:', error);
                 setIsProcessing(false);
+                setSaveError('Failed to save. Please refresh the page and try again.');
             });
     };
 
@@ -586,6 +577,10 @@ export default function Create({
                                     {isProcessing ? (
                                         <span className="text-primary-600 dark:text-primary-400">
                                             Saving...
+                                        </span>
+                                    ) : saveError ? (
+                                        <span className="font-medium text-red-600 dark:text-red-400">
+                                            {saveError}
                                         </span>
                                     ) : lastSaved ? (
                                         <span className="text-green-600 dark:text-green-400">
